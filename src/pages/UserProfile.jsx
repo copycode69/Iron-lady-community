@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { collection, addDoc, query, where, onSnapshot, updateDoc, doc, getDocs } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { FiUser, FiMail, FiMapPin, FiCheckCircle, FiAtSign } from 'react-icons/fi';
 
 function UserProfile({ user }) {
+  const navigate = useNavigate();
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -37,56 +39,9 @@ function UserProfile({ user }) {
         }
       );
 
-      // Check localStorage for saved profile - just pre-fill form
-      const savedProfile = localStorage.getItem('userProfile');
-      if (savedProfile) {
-        try {
-          const profile = JSON.parse(savedProfile);
-          setUserData(profile);
-          setFormData({
-            name: profile.name || '',
-            email: profile.email || '',
-            username: profile.username || '',
-            state: profile.state || ''
-          });
-        } catch (error) {
-          console.error('Error parsing saved profile:', error);
-        }
-      }
-
-      // Check if user profile exists in Firestore - just pre-fill form
-      const checkUserProfile = async () => {
-        try {
-          const userEmail = user?.email || '';
-          if (userEmail) {
-            const usersQuery = query(collection(db, 'users'), where('email', '==', userEmail));
-            const querySnapshot = await getDocs(usersQuery);
-            
-            if (!querySnapshot.empty) {
-              const userDoc = querySnapshot.docs[0];
-              const profileData = {
-                id: userDoc.id,
-                ...userDoc.data()
-              };
-              setUserData(profileData);
-              const userData = userDoc.data();
-              setFormData({
-                name: userData.name || '',
-                email: userData.email || '',
-                username: userData.username || '',
-                state: userData.state || ''
-              });
-              localStorage.setItem('userProfile', JSON.stringify(profileData));
-            } else if (user?.email) {
-              setFormData(prev => ({ ...prev, email: user.email }));
-            }
-          }
-        } catch (error) {
-          console.error('Error checking user profile:', error);
-        }
-      };
-
-      checkUserProfile();
+      // Don't auto-fill form - keep it clean for new profile creation
+      // Only check if user wants to edit (they can click "Edit Profile" from welcome screen)
+      // For now, always start with empty form
 
       return () => {
         statesUnsubscribe();
@@ -242,10 +197,19 @@ function UserProfile({ user }) {
       // Save to localStorage
       localStorage.setItem('userProfile', JSON.stringify(savedUserData));
       setUserData(savedUserData);
-      setIsSubmitted(true);
       
       // Dispatch custom event to update other components
       window.dispatchEvent(new Event('profileUpdated'));
+      
+      // If user already had a profile (editing), redirect to profile view
+      // Otherwise show welcome screen
+      if (userData && userData.id) {
+        // User was editing - redirect to profile view
+        navigate('/my-profile');
+      } else {
+        // New user - show welcome screen
+        setIsSubmitted(true);
+      }
     } catch (error) {
       console.error('Error saving profile:', error);
       alert('Error saving profile. Please try again.');
@@ -358,7 +322,16 @@ function UserProfile({ user }) {
             <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
               <button 
                 className="btn btn-primary" 
-                onClick={() => setIsSubmitted(false)}
+                onClick={() => {
+                  // Pre-fill form with existing data when editing
+                  setFormData({
+                    name: userData.name || '',
+                    email: userData.email || '',
+                    username: userData.username || '',
+                    state: userData.state || ''
+                  });
+                  setIsSubmitted(false);
+                }}
                 style={{ flex: 1 }}
               >
                 Edit Profile

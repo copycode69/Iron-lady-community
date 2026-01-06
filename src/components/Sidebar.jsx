@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { FiMonitor, FiCamera, FiBook, FiCalendar } from 'react-icons/fi';
+import { FiMonitor, FiCamera, FiHome } from 'react-icons/fi';
 import { collection, query, onSnapshot, doc, setDoc, updateDoc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 
@@ -250,24 +250,15 @@ function Sidebar() {
       <div className="sidebar-nav">
         <Link
           to="/feed"
-          className={`sidebar-nav-item ${location.pathname === '/feed' ? 'active' : ''}`}
+          className={`sidebar-nav-item feed-nav-item ${location.pathname === '/feed' ? 'active' : ''}`}
         >
-          <FiMonitor />
-          <span>Feed</span>
-        </Link>
-        <Link
-          to="/courses"
-          className={`sidebar-nav-item ${location.pathname === '/courses' ? 'active' : ''}`}
-        >
-          <FiBook />
-          <span>Courses</span>
-        </Link>
-        <Link
-          to="/events"
-          className={`sidebar-nav-item ${location.pathname === '/events' ? 'active' : ''}`}
-        >
-          <FiCalendar />
-          <span>Events</span>
+          <div className="feed-icon-wrapper">
+            <FiHome />
+          </div>
+          <div className="feed-nav-content">
+            <span className="feed-nav-title">Community Feed</span>
+            <span className="feed-nav-subtitle">Discover & Connect</span>
+          </div>
         </Link>
       </div>
 

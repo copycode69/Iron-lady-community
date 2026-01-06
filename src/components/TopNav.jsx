@@ -324,7 +324,7 @@ function TopNav() {
                 </div>
               </div>
               <div className="dropdown-divider"></div>
-              <Link to="/profile" className="dropdown-item" onClick={() => setDropdownOpen(false)}>
+              <Link to="/my-profile" className="dropdown-item" onClick={() => setDropdownOpen(false)}>
                 <FiUser />
                 <span>My Profile</span>
               </Link>

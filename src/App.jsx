@@ -9,6 +9,7 @@ import Leaderboard from './pages/Leaderboard';
 import AdminDashboard from './pages/AdminDashboard';
 import UserDashboard from './pages/UserDashboard';
 import UserProfile from './pages/UserProfile';
+import ProfileView from './pages/ProfileView';
 import SavedPosts from './pages/SavedPosts';
 import Login from './pages/Login';
 import './App.css';
@@ -20,6 +21,13 @@ function App() {
         <Route path="/" element={<Login />} />
         <Route path="/login" element={<Login />} />
         <Route path="/profile" element={<UserProfile />} />
+        <Route path="/my-profile" element={
+          <Layout>
+            <ProtectedRoute>
+              <ProfileView />
+            </ProtectedRoute>
+          </Layout>
+        } />
         <Route path="/feed" element={
           <Layout>
             <ProtectedRoute>
