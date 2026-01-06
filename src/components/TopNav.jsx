@@ -64,29 +64,23 @@ function TopNav() {
     if (userProfile?.name) {
       return userProfile.name.charAt(0).toUpperCase();
     }
-    if (user?.displayName) {
-      return user.displayName.charAt(0).toUpperCase();
-    }
     if (userProfile?.email) {
       return userProfile.email.charAt(0).toUpperCase();
-    }
-    if (user?.email) {
-      return user.email.charAt(0).toUpperCase();
     }
     return 'I'; // Default to "I" for IronLady
   };
 
   const getUserName = () => {
-    return userProfile?.name || user?.displayName || 'IronLady';
+    return userProfile?.name || 'IronLady';
   };
 
   const getUserEmail = () => {
-    return userProfile?.email || user?.email || 'admin@ironlady.com';
+    return userProfile?.email || 'admin@ironlady.com';
   };
 
   const isUserAdmin = () => {
     const isAdminAuthenticated = sessionStorage.getItem('adminAuthenticated') === 'true';
-    return userProfile?.isAdmin || user?.isAdmin || isAdminAuthenticated || false;
+    return userProfile?.isAdmin || userProfile?.isSuperAdmin || isAdminAuthenticated || false;
   };
 
   const isSuperAdmin = () => {

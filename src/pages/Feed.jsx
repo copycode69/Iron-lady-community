@@ -6,7 +6,8 @@ import PostCard from '../components/PostCard';
 import CreatePostModal from '../components/CreatePostModal';
 import { FiPlus, FiChevronDown } from 'react-icons/fi';
 
-function Feed({ user }) {
+function Feed() {
+  console.log('Feed - Component rendered');
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedChannelId = searchParams.get('channel') || null;
   const [posts, setPosts] = useState([]);
@@ -21,36 +22,72 @@ function Feed({ user }) {
   const [sortBy, setSortBy] = useState('latest');
   const [selectedChannelName, setSelectedChannelName] = useState(null);
   const POSTS_PER_PAGE = 20;
+  
+  console.log('Feed - Current state:', {
+    postsCount: posts.length,
+    loading,
+    isAdmin,
+    userProfile: userProfile ? { name: userProfile.name, state: userProfile.state } : null,
+    selectedChannelId
+  });
 
   useEffect(() => {
     // Get user profile from localStorage
-    const savedProfile = localStorage.getItem('userProfile');
-    if (savedProfile) {
-      try {
-        const profile = JSON.parse(savedProfile);
-        setUserProfile(profile);
-        setIsAdmin(profile.isAdmin || profile.isSuperAdmin || 
-                   profile.email === 'superadmin@gmail.com' || 
-                   profile.username === 'ironlady');
-      } catch (error) {
-        console.error('Error parsing user profile:', error);
+    const loadProfile = () => {
+      const savedProfile = localStorage.getItem('userProfile');
+      if (savedProfile) {
+        try {
+          const profile = JSON.parse(savedProfile);
+          setUserProfile(profile);
+          const isUserAdmin = profile.isAdmin || profile.isSuperAdmin || 
+                             profile.email === 'superadmin@gmail.com' || 
+                             profile.username === 'ironlady';
+          setIsAdmin(isUserAdmin);
+          console.log('Feed - Profile loaded:', {
+            name: profile.name,
+            email: profile.email,
+            username: profile.username,
+            state: profile.state,
+            isAdmin: isUserAdmin
+          });
+        } catch (error) {
+          console.error('Error parsing user profile:', error);
+          setIsAdmin(false);
+        }
+      } else {
+        // No profile - not admin
+        setIsAdmin(false);
+        console.log('Feed - No profile found in localStorage');
       }
-    } else {
-      // No profile - not admin
-      setIsAdmin(false);
-    }
+    };
+
+    // Load profile initially
+    loadProfile();
+
+    // Listen for profile updates
+    const handleProfileUpdate = () => {
+      loadProfile();
+    };
+    window.addEventListener('profileUpdated', handleProfileUpdate);
+
+    return () => {
+      window.removeEventListener('profileUpdated', handleProfileUpdate);
+    };
   }, []);
 
   const loadPosts = useCallback(async (isInitial = false) => {
+    console.log('Feed - loadPosts called, isInitial:', isInitial);
     try {
       if (isInitial) {
         setLoading(true);
+        console.log('Feed - Setting loading to true');
       } else {
         setLoadingMore(true);
       }
 
       // Get user's state for filtering
       const savedProfile = localStorage.getItem('userProfile');
+      console.log('Feed - Saved profile exists:', !!savedProfile);
       let userStateId = null;
       let isUserAdmin = false;
       const SUPERADMIN_EMAIL = 'superadmin@gmail.com';
@@ -81,49 +118,120 @@ function Feed({ user }) {
       }
 
       let q;
+      let snapshot;
       // For admins, get more posts since they see all posts
       const queryLimit = isUserAdmin ? POSTS_PER_PAGE * 5 : POSTS_PER_PAGE * 2;
       
-      if (sortBy === 'popular') {
-        q = query(
-          collection(db, 'posts'),
-          orderBy('likes', 'desc'),
-          orderBy('createdAt', 'desc'),
-          limit(queryLimit)
-        );
-      } else if (sortBy === 'oldest') {
-        q = query(
-          collection(db, 'posts'),
-          orderBy('createdAt', 'asc'),
-          limit(queryLimit)
-        );
-      } else {
-        // Latest
-        q = query(
-          collection(db, 'posts'),
-          orderBy('createdAt', 'desc'),
-          limit(queryLimit)
-        );
-      }
+      console.log('Feed - Attempting to query Firestore...');
+      console.log('Feed - Query parameters:', { sortBy, queryLimit, isInitial, hasLastPost: !!lastPost });
+      
+      try {
+        // First, try a simple query without ordering to test connectivity
+        const testQuery = query(collection(db, 'posts'), limit(1));
+        const testSnapshot = await getDocs(testQuery);
+        console.log('Feed - Firestore connection test successful, posts collection exists');
+        
+        if (sortBy === 'popular') {
+          q = query(
+            collection(db, 'posts'),
+            orderBy('likes', 'desc'),
+            orderBy('createdAt', 'desc'),
+            limit(queryLimit)
+          );
+        } else if (sortBy === 'oldest') {
+          q = query(
+            collection(db, 'posts'),
+            orderBy('createdAt', 'asc'),
+            limit(queryLimit)
+          );
+        } else {
+          // Latest
+          q = query(
+            collection(db, 'posts'),
+            orderBy('createdAt', 'desc'),
+            limit(queryLimit)
+          );
+        }
 
-      // If loading more, start after last post
-      if (!isInitial && lastPost) {
-        q = query(q, startAfter(lastPost));
-      }
+        // If loading more, start after last post
+        if (!isInitial && lastPost) {
+          q = query(q, startAfter(lastPost));
+        }
 
-      const snapshot = await getDocs(q);
+        snapshot = await getDocs(q);
+        console.log('Feed - Ordered query successful, fetched:', snapshot.docs.length, 'documents');
+      } catch (queryError) {
+        console.error('Error with ordered query, trying fallback:', queryError);
+        console.error('Query error details:', {
+          code: queryError.code,
+          message: queryError.message,
+          stack: queryError.stack
+        });
+        // Fallback: Get all posts without ordering (in case createdAt field is missing or index issue)
+        try {
+          const fallbackQuery = query(
+            collection(db, 'posts'),
+            limit(queryLimit * 2) // Get more to account for filtering
+          );
+          snapshot = await getDocs(fallbackQuery);
+          console.log('Fallback query successful, fetched:', snapshot.docs.length, 'posts');
+        } catch (fallbackError) {
+          console.error('Fallback query also failed:', fallbackError);
+          console.error('Fallback error details:', {
+            code: fallbackError.code,
+            message: fallbackError.message
+          });
+          throw fallbackError;
+        }
+      }
       let postsData = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       }));
 
+      // If we used fallback query (no ordering), sort manually
+      if (postsData.length > 0 && (!postsData[0].createdAt || !postsData[0].createdAt.toDate)) {
+        // Fallback query was used, sort manually
+        if (sortBy === 'popular') {
+          postsData.sort((a, b) => {
+            const likesA = a.likes || 0;
+            const likesB = b.likes || 0;
+            if (likesB !== likesA) return likesB - likesA;
+            const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : (a.createdAt ? new Date(a.createdAt) : new Date(0));
+            const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : (b.createdAt ? new Date(b.createdAt) : new Date(0));
+            return dateB - dateA;
+          });
+        } else if (sortBy === 'oldest') {
+          postsData.sort((a, b) => {
+            const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : (a.createdAt ? new Date(a.createdAt) : new Date(0));
+            const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : (b.createdAt ? new Date(b.createdAt) : new Date(0));
+            return dateA - dateB;
+          });
+        } else {
+          // Latest - default
+          postsData.sort((a, b) => {
+            const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : (a.createdAt ? new Date(a.createdAt) : new Date(0));
+            const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : (b.createdAt ? new Date(b.createdAt) : new Date(0));
+            return dateB - dateA;
+          });
+        }
+      }
+
       console.log('Feed - Total posts fetched from Firestore:', postsData.length);
+      console.log('Feed - Sample post data:', postsData.length > 0 ? {
+        id: postsData[0].id,
+        stateId: postsData[0].stateId,
+        channelId: postsData[0].channelId,
+        isAnnouncement: postsData[0].isAnnouncement,
+        hasContent: !!postsData[0].content,
+        createdAt: postsData[0].createdAt
+      } : 'No posts');
 
       // Filter out announcements from regular posts (they're shown separately)
       postsData = postsData.filter(post => !post.isAnnouncement);
       
       console.log('Feed - Posts after removing announcements:', postsData.length);
-      console.log('Feed - Admin check: isUserAdmin =', isUserAdmin, 'email =', savedProfile ? JSON.parse(savedProfile).email : 'no profile');
+      console.log('Feed - Admin check: isUserAdmin =', isUserAdmin, 'userStateId =', userStateId, 'email =', savedProfile ? JSON.parse(savedProfile).email : 'no profile');
       
       // STRICT FILTERING: Regular users only see posts from their state
       if (!isUserAdmin) {
@@ -164,11 +272,17 @@ function Feed({ user }) {
       postsData = postsData.slice(0, POSTS_PER_PAGE);
       
       console.log('Feed - Loaded posts:', postsData.length, 'isAdmin:', isUserAdmin, 'userState:', userStateId);
+      console.log('Feed - Setting posts state with', postsData.length, 'posts');
 
       if (isInitial) {
         setPosts(postsData);
+        console.log('Feed - Initial posts set:', postsData.length);
       } else {
-        setPosts(prev => [...prev, ...postsData]);
+        setPosts(prev => {
+          const newPosts = [...prev, ...postsData];
+          console.log('Feed - Appended posts, total:', newPosts.length);
+          return newPosts;
+        });
       }
 
       // Update pagination state
@@ -181,16 +295,23 @@ function Feed({ user }) {
 
       setLoading(false);
       setLoadingMore(false);
+      console.log('Feed - loadPosts completed successfully, loading set to false');
+      console.log('Feed - loadPosts completed successfully');
     } catch (error) {
       console.error('Error loading posts:', error);
-      console.error('Error details:', error.message, error.code);
+      console.error('Error details:', error.message, error.code, error.stack);
       setLoading(false);
       setLoadingMore(false);
       
       // Check if it's a Firestore index error
       if (error.code === 'failed-precondition') {
+        console.error('Firestore index error - check console for index link');
         alert('Firestore index required. Please check the browser console for the index link.');
+      } else if (error.code === 'permission-denied') {
+        console.error('Firestore permission denied - check security rules');
+        alert('Permission denied. Please check Firestore security rules.');
       } else {
+        console.error('Unknown error:', error);
         alert(`Error loading posts: ${error.message || 'Please check your connection and try again.'}`);
       }
     }
@@ -222,10 +343,38 @@ function Feed({ user }) {
 
   useEffect(() => {
     // Load initial posts
+    console.log('Feed - useEffect triggered, loading posts...', { sortBy, selectedChannelId });
     setLastPost(null);
     setHasMore(true);
     setPosts([]);
-    loadPosts(true);
+    setLoading(true); // Ensure loading is true
+    
+    // Call loadPosts directly
+    const loadInitialPosts = async () => {
+      try {
+        console.log('Feed - Starting to load posts...');
+        await loadPosts(true);
+        console.log('Feed - Posts loaded successfully');
+      } catch (error) {
+        console.error('Feed - Error in loadPosts:', error);
+        setLoading(false);
+        setLoadingMore(false);
+      }
+    };
+    
+    // Add a timeout to prevent infinite loading
+    const timeoutId = setTimeout(() => {
+      if (loading) {
+        console.warn('Feed - Loading timeout, setting loading to false');
+        setLoading(false);
+      }
+    }, 30000); // 30 second timeout
+    
+    loadInitialPosts();
+    
+    return () => {
+      clearTimeout(timeoutId);
+    };
   }, [sortBy, selectedChannelId, loadPosts]);
 
   // Fetch announcements separately (always visible at top)
@@ -346,7 +495,7 @@ function Feed({ user }) {
   const handleLike = async (postId, isLiked) => {
     try {
       const postRef = doc(db, 'posts', postId);
-      const userId = userProfile?.id || user?.uid || 'guest';
+      const userId = userProfile?.id || 'guest';
       
       if (isLiked) {
         await updateDoc(postRef, {
@@ -529,10 +678,32 @@ function Feed({ user }) {
       )}
 
       {loading ? (
-        <div style={{ textAlign: 'center', padding: '40px' }}>Loading posts...</div>
+        <div style={{ textAlign: 'center', padding: '40px' }}>
+          <div style={{ fontSize: '16px', color: '#6b7280', marginBottom: '10px' }}>Loading posts...</div>
+          <div style={{ fontSize: '14px', color: '#9ca3af', marginBottom: '10px' }}>Please wait while we fetch your feed</div>
+          <div style={{ fontSize: '12px', color: '#d1d5db' }}>
+            Debug: loading={loading.toString()}, posts={posts.length}, isAdmin={isAdmin.toString()}
+          </div>
+        </div>
       ) : posts.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '40px', color: '#6b7280' }}>
-          No posts yet. Be the first to post!
+          <div style={{ fontSize: '18px', fontWeight: 600, marginBottom: '10px' }}>No posts yet</div>
+          <div style={{ fontSize: '14px', marginBottom: '20px' }}>
+            {isAdmin ? (
+              'There are no posts in the community yet. Create the first post!'
+            ) : userProfile?.state ? (
+              `No posts in your state (${userProfile.state}) yet. Be the first to post!`
+            ) : (
+              'You need to set your state in your profile to see posts. Please update your profile.'
+            )}
+          </div>
+          <button 
+            className="btn btn-primary" 
+            onClick={() => setIsModalOpen(true)}
+            style={{ marginTop: '10px' }}
+          >
+            Create First Post
+          </button>
         </div>
       ) : (
         <>

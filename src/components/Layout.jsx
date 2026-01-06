@@ -29,7 +29,7 @@ function Layout({ children }) {
     <div className="app-container">
       <Sidebar />
       <div className="main-content">
-        <TopNav user={user} />
+        <TopNav />
         <LiveBanner />
         <div className="content-area" style={{ marginTop: isLive ? '120px' : '70px' }}>
           {children}
