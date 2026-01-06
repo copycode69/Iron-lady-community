@@ -18,7 +18,6 @@ function Sidebar() {
       const savedProfile = localStorage.getItem('userProfile');
       const isAdminAuthenticated = sessionStorage.getItem('adminAuthenticated') === 'true';
       const SUPERADMIN_EMAIL = 'superadmin@gmail.com';
-      const DEFAULT_ADMIN_EMAIL = 'admin@ironlady.com';
       
       // If admin authenticated via password, treat as admin
       if (isAdminAuthenticated) {
@@ -30,9 +29,9 @@ function Sidebar() {
       if (savedProfile) {
         try {
           const profile = JSON.parse(savedProfile);
+          // Only superadmin@gmail.com with username ironlady is superadmin
           const isUserAdmin = profile.isAdmin || profile.isSuperAdmin || 
-                             profile.email === SUPERADMIN_EMAIL || 
-                             profile.email === DEFAULT_ADMIN_EMAIL ||
+                             (profile.email === SUPERADMIN_EMAIL && profile.username === 'ironlady') ||
                              profile.username === 'ironlady';
           setUserState(profile.state);
           setIsAdmin(isUserAdmin);

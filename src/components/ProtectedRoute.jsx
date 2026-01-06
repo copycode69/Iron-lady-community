@@ -21,9 +21,23 @@ function ProtectedRoute({ children }) {
     if (savedProfile) {
       try {
         const profile = JSON.parse(savedProfile);
+        // Check if user is superadmin (they don't need a state)
+        // Only superadmin@gmail.com with username ironlady is superadmin
+        const isSuperAdmin = (profile.email === 'superadmin@gmail.com' && profile.username === 'ironlady') || 
+                            profile.isSuperAdmin === true;
+        
         // Check if profile has required fields (including username for login)
-        if (profile.name && profile.email && profile.state && profile.username) {
-          setHasProfile(true);
+        // Superadmins don't need a state, regular users do
+        if (profile.name && profile.email && profile.username) {
+          if (isSuperAdmin || profile.state) {
+            setHasProfile(true);
+            // If superadmin, also set admin authentication
+            if (isSuperAdmin) {
+              sessionStorage.setItem('adminAuthenticated', 'true');
+            }
+          } else {
+            setHasProfile(false);
+          }
         } else {
           setHasProfile(false);
         }

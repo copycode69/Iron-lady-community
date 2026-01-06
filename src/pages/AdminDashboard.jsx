@@ -32,33 +32,50 @@ function AdminDashboard() {
   const [selectedStateForChannel, setSelectedStateForChannel] = useState('');
 
   useEffect(() => {
-    // Check if admin is authenticated
+    console.log('AdminDashboard - Checking authentication...');
+    // Check if admin is authenticated via sessionStorage OR if user is superadmin
     const authStatus = sessionStorage.getItem('adminAuthenticated');
-    if (authStatus === 'true') {
-      setIsAuthenticated(true);
-      
-      // Check if user is superadmin
-      const savedProfile = localStorage.getItem('userProfile');
+    const savedProfile = localStorage.getItem('userProfile');
     const SUPERADMIN_EMAIL = 'superadmin@gmail.com';
-    const DEFAULT_ADMIN_EMAIL = 'admin@ironlady.com'; // Default IronLady account
-      
-      if (savedProfile) {
-        try {
-          const profile = JSON.parse(savedProfile);
-          setIsSuperAdmin(
-            profile.email === SUPERADMIN_EMAIL || 
-            profile.username === 'ironlady' ||
-            profile.email === DEFAULT_ADMIN_EMAIL ||
-            profile.isSuperAdmin === true
-          );
-        } catch (error) {
-          console.error('Error parsing profile:', error);
-        }
-      } else {
-        // No profile = default IronLady account = super admin
-        setIsSuperAdmin(true);
+    
+    console.log('AdminDashboard - Auth check:', {
+      authStatus,
+      hasProfile: !!savedProfile
+    });
+    
+    // Check if user is superadmin from localStorage
+    let isSuperAdminUser = false;
+    if (savedProfile) {
+      try {
+        const profile = JSON.parse(savedProfile);
+        // Only superadmin@gmail.com with username ironlady is superadmin
+        isSuperAdminUser = (profile.email === SUPERADMIN_EMAIL && profile.username === 'ironlady') || 
+                          profile.username === 'ironlady' ||
+                          profile.isSuperAdmin === true;
+        setIsSuperAdmin(isSuperAdminUser);
+        console.log('AdminDashboard - Profile parsed:', {
+          email: profile.email,
+          username: profile.username,
+          isSuperAdmin: isSuperAdminUser
+        });
+      } catch (error) {
+        console.error('Error parsing profile:', error);
+      }
+    }
+    
+    // If authenticated via sessionStorage OR if superadmin, allow access
+    if (authStatus === 'true' || isSuperAdminUser) {
+      console.log('AdminDashboard - Authentication successful, setting isAuthenticated to true');
+      // Use a callback to ensure state is updated before next render
+      setIsAuthenticated(true);
+      // If superadmin but not in sessionStorage, set it
+      if (isSuperAdminUser && authStatus !== 'true') {
+        sessionStorage.setItem('adminAuthenticated', 'true');
+        console.log('AdminDashboard - Set adminAuthenticated in sessionStorage');
       }
     } else {
+      console.log('AdminDashboard - Not authenticated, showing password modal');
+      // Not authenticated and not superadmin - show password modal
       setShowPasswordModal(true);
     }
   }, []);
@@ -69,47 +86,142 @@ function AdminDashboard() {
   };
 
   useEffect(() => {
+    // Check authentication status directly from storage to avoid race condition
+    const authStatus = sessionStorage.getItem('adminAuthenticated');
+    const savedProfile = localStorage.getItem('userProfile');
+    const SUPERADMIN_EMAIL = 'superadmin@gmail.com';
+    
+    let isSuperAdminUser = false;
+    if (savedProfile) {
+      try {
+        const profile = JSON.parse(savedProfile);
+        isSuperAdminUser = (profile.email === SUPERADMIN_EMAIL && profile.username === 'ironlady') || 
+                          profile.username === 'ironlady' ||
+                          profile.isSuperAdmin === true;
+      } catch (error) {
+        console.error('Error parsing profile:', error);
+      }
+    }
+    
+    const isActuallyAuthenticated = authStatus === 'true' || isSuperAdminUser;
+    
+    console.log('AdminDashboard - Data fetch useEffect, isAuthenticated:', isAuthenticated, 'isActuallyAuthenticated:', isActuallyAuthenticated);
+    
     // Only fetch data if authenticated
-    if (!isAuthenticated) {
+    if (!isActuallyAuthenticated && !isAuthenticated) {
+      console.log('AdminDashboard - Not authenticated, skipping data fetch');
+      setLoading(false);
+      return;
+    }
+    
+    // If we're authenticated but state hasn't updated yet, set it immediately
+    if (isActuallyAuthenticated && !isAuthenticated) {
+      console.log('AdminDashboard - Authenticated but state not updated, setting immediately...');
+      setIsAuthenticated(true);
+      // Continue with data fetch
+    }
+
+    // Only proceed if actually authenticated
+    if (!isActuallyAuthenticated) {
+      console.log('AdminDashboard - Not actually authenticated, skipping data fetch');
       setLoading(false);
       return;
     }
 
+    console.log('AdminDashboard - Starting to fetch data from Firestore...');
     // Fetch posts - limit to recent 50 for performance
-    const postsQuery = query(
-      collection(db, 'posts'),
-      orderBy('createdAt', 'desc'),
-      limit(50)
-    );
-    const postsUnsubscribe = onSnapshot(postsQuery, (snapshot) => {
-      const postsData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      setPosts(postsData);
-      // Get total count separately (optimized)
-      getDocs(collection(db, 'posts')).then(totalSnapshot => {
-        setStats(prev => ({ ...prev, totalPosts: totalSnapshot.size }));
-      }).catch(err => console.error('Error getting total posts:', err));
-    });
+    let postsUnsubscribe;
+    try {
+      const postsQuery = query(
+        collection(db, 'posts'),
+        orderBy('createdAt', 'desc'),
+        limit(50)
+      );
+      postsUnsubscribe = onSnapshot(
+        postsQuery, 
+        (snapshot) => {
+          const postsData = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }));
+          console.log('AdminDashboard - Posts fetched:', postsData.length);
+          setPosts(postsData);
+          // Get total count separately (optimized)
+          getDocs(collection(db, 'posts')).then(totalSnapshot => {
+            setStats(prev => ({ ...prev, totalPosts: totalSnapshot.size }));
+          }).catch(err => console.error('Error getting total posts:', err));
+        },
+        (error) => {
+          console.error('AdminDashboard - Error fetching posts with orderBy, trying fallback:', error);
+          // Fallback: Get posts without ordering
+          const fallbackQuery = query(collection(db, 'posts'), limit(50));
+          onSnapshot(fallbackQuery, (snapshot) => {
+            const postsData = snapshot.docs.map(doc => ({
+              id: doc.id,
+              ...doc.data()
+            }));
+            // Sort manually by createdAt
+            postsData.sort((a, b) => {
+              const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : (a.createdAt ? new Date(a.createdAt) : new Date(0));
+              const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : (b.createdAt ? new Date(b.createdAt) : new Date(0));
+              return dateB - dateA;
+            });
+            console.log('AdminDashboard - Posts fetched (fallback):', postsData.length);
+            setPosts(postsData);
+          });
+        }
+      );
+    } catch (error) {
+      console.error('AdminDashboard - Error setting up posts query:', error);
+      setPosts([]);
+    }
 
     // Fetch users - limit to 100 for performance
-    const usersQuery = query(
-      collection(db, 'users'),
-      orderBy('createdAt', 'desc'),
-      limit(100)
-    );
-    const usersUnsubscribe = onSnapshot(usersQuery, (snapshot) => {
-      const usersData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      setUsers(usersData);
-      // Get total count separately (optimized)
-      getDocs(collection(db, 'users')).then(totalSnapshot => {
-        setStats(prev => ({ ...prev, totalUsers: totalSnapshot.size }));
-      }).catch(err => console.error('Error getting total users:', err));
-    });
+    let usersUnsubscribe;
+    try {
+      const usersQuery = query(
+        collection(db, 'users'),
+        orderBy('createdAt', 'desc'),
+        limit(100)
+      );
+      usersUnsubscribe = onSnapshot(
+        usersQuery, 
+        (snapshot) => {
+          const usersData = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }));
+          console.log('AdminDashboard - Users fetched:', usersData.length);
+          setUsers(usersData);
+          // Get total count separately (optimized)
+          getDocs(collection(db, 'users')).then(totalSnapshot => {
+            setStats(prev => ({ ...prev, totalUsers: totalSnapshot.size }));
+          }).catch(err => console.error('Error getting total users:', err));
+        },
+        (error) => {
+          console.error('AdminDashboard - Error fetching users with orderBy, trying fallback:', error);
+          // Fallback: Get users without ordering
+          const fallbackQuery = query(collection(db, 'users'), limit(100));
+          onSnapshot(fallbackQuery, (snapshot) => {
+            const usersData = snapshot.docs.map(doc => ({
+              id: doc.id,
+              ...doc.data()
+            }));
+            // Sort manually by createdAt
+            usersData.sort((a, b) => {
+              const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : (a.createdAt ? new Date(a.createdAt) : new Date(0));
+              const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : (b.createdAt ? new Date(b.createdAt) : new Date(0));
+              return dateB - dateA;
+            });
+            console.log('AdminDashboard - Users fetched (fallback):', usersData.length);
+            setUsers(usersData);
+          });
+        }
+      );
+    } catch (error) {
+      console.error('AdminDashboard - Error setting up users query:', error);
+      setUsers([]);
+    }
 
     // Fetch states
     const statesQuery = query(collection(db, 'states'));
@@ -147,13 +259,18 @@ function AdminDashboard() {
       }
     );
 
-    setLoading(false);
+    // Set loading to false after a short delay to ensure data is loaded
+    const loadingTimeout = setTimeout(() => {
+      console.log('AdminDashboard - Data fetch complete, setting loading to false');
+      setLoading(false);
+    }, 2000);
 
     return () => {
-      postsUnsubscribe();
-      usersUnsubscribe();
-      statesUnsubscribe();
-      channelsUnsubscribe();
+      clearTimeout(loadingTimeout);
+      if (postsUnsubscribe && typeof postsUnsubscribe === 'function') postsUnsubscribe();
+      if (usersUnsubscribe && typeof usersUnsubscribe === 'function') usersUnsubscribe();
+      if (statesUnsubscribe && typeof statesUnsubscribe === 'function') statesUnsubscribe();
+      if (channelsUnsubscribe && typeof channelsUnsubscribe === 'function') channelsUnsubscribe();
     };
   }, [isAuthenticated]);
 
@@ -170,7 +287,7 @@ function AdminDashboard() {
         userIsSuperAdmin = profile.isSuperAdmin || 
                          profile.email === 'superadmin@gmail.com' || 
                          profile.username === 'ironlady' ||
-                         profile.email === 'admin@ironlady.com';
+                         (profile.email === 'superadmin@gmail.com' && profile.username === 'ironlady');
       } catch (error) {
         console.error('Error parsing profile:', error);
       }
@@ -419,19 +536,32 @@ function AdminDashboard() {
   }
 
   if (loading) {
-    return <div className="admin-container">Loading...</div>;
+    console.log('AdminDashboard - Still loading, showing loading screen');
+    return (
+      <div className="admin-container" style={{ padding: '40px', textAlign: 'center' }}>
+        <div style={{ fontSize: '18px', color: '#6b7280', marginBottom: '10px' }}>Loading admin dashboard...</div>
+        <div style={{ fontSize: '14px', color: '#9ca3af' }}>
+          Fetching data from Firestore...
+        </div>
+        <div style={{ fontSize: '12px', color: '#d1d5db', marginTop: '10px' }}>
+          Debug: isAuthenticated={isAuthenticated.toString()}, loading={loading.toString()}
+        </div>
+      </div>
+    );
   }
+  
+  console.log('AdminDashboard - Rendering dashboard content');
 
   // Get display info - use default IronLady if no profile
   const savedProfile = localStorage.getItem('userProfile');
   let displayName = 'IronLady';
-  let displayEmail = 'admin@ironlady.com';
+  let displayEmail = 'superadmin@gmail.com';
   
   if (savedProfile) {
     try {
       const profile = JSON.parse(savedProfile);
       displayName = profile.name || 'IronLady';
-      displayEmail = profile.email || 'admin@ironlady.com';
+      displayEmail = profile.email || 'superadmin@gmail.com';
     } catch (error) {
       console.error('Error parsing profile:', error);
     }
@@ -767,12 +897,10 @@ function AdminDashboard() {
       <CreateAnnouncementModal
         isOpen={isAnnouncementModalOpen}
         onClose={() => setIsAnnouncementModalOpen(false)}
-        user={user}
       />
       <CreatePostModal
         isOpen={isPostModalOpen}
         onClose={() => setIsPostModalOpen(false)}
-        user={user}
       />
 
       {/* Add/Edit State Modal */}

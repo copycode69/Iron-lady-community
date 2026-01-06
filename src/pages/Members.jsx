@@ -38,15 +38,16 @@ function Members() {
   // Check if user is admin and get their state
   useEffect(() => {
     const savedProfile = localStorage.getItem('userProfile');
-    const SUPERADMIN_EMAIL = 'admin@ironlady.com';
-    const DEFAULT_ADMIN_EMAIL = 'guest@ironlady.com';
+    const SUPERADMIN_EMAIL = 'superadmin@gmail.com';
     
     if (savedProfile) {
       try {
         const profile = JSON.parse(savedProfile);
+        // Only superadmin@gmail.com with username ironlady is superadmin
         setIsAdmin(profile.isAdmin || 
                    profile.isSuperAdmin || 
-                   profile.email === SUPERADMIN_EMAIL);
+                   (profile.email === SUPERADMIN_EMAIL && profile.username === 'ironlady') ||
+                   profile.username === 'ironlady');
         setUserStateId(profile.state || null);
       } catch (error) {
         console.error('Error parsing profile:', error);
@@ -70,8 +71,7 @@ function Members() {
       const savedProfile = localStorage.getItem('userProfile');
       let currentUserStateId = null;
       let isUserAdmin = false;
-      const SUPERADMIN_EMAIL = 'admin@ironlady.com';
-      // Removed default guest admin email
+      const SUPERADMIN_EMAIL = 'superadmin@gmail.com';
       
       if (savedProfile) {
         try {

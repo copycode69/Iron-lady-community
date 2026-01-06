@@ -37,7 +37,7 @@ function UserDashboard({ user }) {
       const userIsAdmin = profile.isAdmin || profile.isSuperAdmin || 
                          profile.email === 'superadmin@gmail.com' || 
                          profile.username === 'ironlady' ||
-                         profile.email === 'admin@ironlady.com';
+                         (profile.email === 'superadmin@gmail.com' && profile.username === 'ironlady');
       setIsUserAdmin(userIsAdmin);
       
       // Fetch all states (needed for admin to show state names for channels)

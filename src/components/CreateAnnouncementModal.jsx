@@ -62,7 +62,7 @@ function CreateAnnouncementModal({ isOpen, onClose, user }) {
       let authorInfo = {
         uid: user?.uid || 'admin',
         name: user?.displayName || 'IronLady',
-        email: user?.email || 'admin@ironlady.com',
+        email: user?.email || 'superadmin@gmail.com',
         isAdmin: true
       };
       
@@ -72,7 +72,7 @@ function CreateAnnouncementModal({ isOpen, onClose, user }) {
           authorInfo = {
             uid: profile.id || user?.uid || 'admin',
             name: profile.name || user?.displayName || 'IronLady',
-            email: profile.email || user?.email || 'admin@ironlady.com',
+            email: profile.email || user?.email || 'superadmin@gmail.com',
             isAdmin: profile.isAdmin || true
           };
         } catch (error) {

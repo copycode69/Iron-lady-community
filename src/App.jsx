@@ -62,7 +62,11 @@ function App() {
             </ProtectedRoute>
           </Layout>
         } />
-        <Route path="/admin" element={<AdminDashboard />} />
+        <Route path="/admin" element={
+          <Layout>
+            <AdminDashboard />
+          </Layout>
+        } />
         <Route path="/saved" element={
           <Layout>
             <ProtectedRoute>

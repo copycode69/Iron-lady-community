@@ -25,22 +25,22 @@ function Courses() {
   // Check if user is admin
   useEffect(() => {
     const savedProfile = localStorage.getItem('userProfile');
-    const SUPERADMIN_EMAIL = 'admin@ironlady.com';
-    // Removed default guest admin email
+    const SUPERADMIN_EMAIL = 'superadmin@gmail.com';
     
     if (savedProfile) {
       try {
         const profile = JSON.parse(savedProfile);
+        // Only superadmin@gmail.com with username ironlady is superadmin
         setIsAdmin(profile.isAdmin || 
                    profile.isSuperAdmin || 
-                   profile.email === SUPERADMIN_EMAIL ||
-                   profile.email === DEFAULT_ADMIN_EMAIL);
+                   (profile.email === SUPERADMIN_EMAIL && profile.username === 'ironlady') ||
+                   profile.username === 'ironlady');
       } catch (error) {
         console.error('Error parsing profile:', error);
       }
     } else {
-      // Default account is admin
-      setIsAdmin(true);
+      // No profile - not admin
+      setIsAdmin(false);
     }
   }, []);
 

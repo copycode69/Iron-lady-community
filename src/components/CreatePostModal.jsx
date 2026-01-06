@@ -88,17 +88,16 @@ function CreatePostModal({ isOpen, onClose }) {
     let userStateId = null;
     let userIsAdmin = false;
     const SUPERADMIN_EMAIL = 'superadmin@gmail.com';
-    const DEFAULT_ADMIN_EMAIL = 'admin@ironlady.com';
     
     if (savedProfile) {
       try {
         const profile = JSON.parse(savedProfile);
         userStateId = profile.state;
+        // Only superadmin@gmail.com with username ironlady is superadmin
         userIsAdmin = profile.isAdmin || 
                      profile.isSuperAdmin || 
-                     profile.email === SUPERADMIN_EMAIL ||
-                     profile.username === 'ironlady' ||
-                     profile.email === DEFAULT_ADMIN_EMAIL;
+                     (profile.email === SUPERADMIN_EMAIL && profile.username === 'ironlady') ||
+                     profile.username === 'ironlady';
       } catch (error) {
         console.error('Error parsing profile:', error);
       }

@@ -50,7 +50,7 @@ function MessageModal({ isOpen, onClose, isAdmin }) {
         console.error('Error parsing profile:', error);
       }
     } else if (isAdminAuthenticated) {
-      setUserProfile({ name: 'IronLady', email: 'admin@ironlady.com', isAdmin: true });
+      setUserProfile({ name: 'IronLady', email: 'superadmin@gmail.com', username: 'ironlady', isAdmin: true, isSuperAdmin: true });
     }
 
     // Listen to messages in real-time
@@ -160,8 +160,10 @@ function MessageModal({ isOpen, onClose, isAdmin }) {
       let authorInfo = {
         id: 'admin',
         name: 'IronLady',
-        email: 'admin@ironlady.com',
-        isAdmin: true
+        email: 'superadmin@gmail.com',
+        username: 'ironlady',
+        isAdmin: true,
+        isSuperAdmin: true
       };
 
       if (savedProfile) {
@@ -170,9 +172,10 @@ function MessageModal({ isOpen, onClose, isAdmin }) {
           authorInfo = {
             id: profile.id || 'admin',
             name: profile.name || 'Admin',
-            email: profile.email || 'admin@ironlady.com',
+            email: profile.email || 'superadmin@gmail.com',
             username: profile.username || null,
-            isAdmin: profile.isAdmin || isAdminAuthenticated
+            isAdmin: profile.isAdmin || isAdminAuthenticated,
+            isSuperAdmin: profile.isSuperAdmin || false
           };
         } catch (error) {
           console.error('Error parsing profile:', error);
@@ -181,8 +184,10 @@ function MessageModal({ isOpen, onClose, isAdmin }) {
         authorInfo = {
           id: 'admin',
           name: 'IronLady',
-          email: 'admin@ironlady.com',
-          isAdmin: true
+          email: 'superadmin@gmail.com',
+          username: 'ironlady',
+          isAdmin: true,
+          isSuperAdmin: true
         };
       }
 

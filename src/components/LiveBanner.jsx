@@ -12,8 +12,7 @@ function LiveBanner() {
     // Check if current user is admin
     const savedProfile = localStorage.getItem('userProfile');
     const isAdminAuthenticated = sessionStorage.getItem('adminAuthenticated') === 'true';
-    const SUPERADMIN_EMAIL = 'admin@ironlady.com';
-    // Removed default guest admin email
+    const SUPERADMIN_EMAIL = 'superadmin@gmail.com';
     
     let userIsAdmin = false;
     if (isAdminAuthenticated) {
@@ -21,10 +20,11 @@ function LiveBanner() {
     } else if (savedProfile) {
       try {
         const profile = JSON.parse(savedProfile);
+        // Only superadmin@gmail.com with username ironlady is superadmin
         userIsAdmin = profile.isAdmin || 
                      profile.isSuperAdmin || 
-                     profile.email === SUPERADMIN_EMAIL ||
-                     profile.email === DEFAULT_ADMIN_EMAIL;
+                     (profile.email === SUPERADMIN_EMAIL && profile.username === 'ironlady') ||
+                     profile.username === 'ironlady';
       } catch (error) {
         console.error('Error parsing profile:', error);
       }

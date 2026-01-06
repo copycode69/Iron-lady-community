@@ -24,7 +24,7 @@ function NotificationModal({ isOpen, onClose }) {
         console.error('Error parsing profile:', error);
       }
     } else if (isAdminAuthenticated) {
-      setUserProfile({ id: 'admin', name: 'IronLady', email: 'admin@ironlady.com', isAdmin: true });
+      setUserProfile({ id: 'admin', name: 'IronLady', email: 'superadmin@gmail.com', username: 'ironlady', isAdmin: true, isSuperAdmin: true });
     }
 
     if (!userProfile || !userProfile.id) {

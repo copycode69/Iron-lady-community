@@ -48,7 +48,9 @@ function Feed() {
             email: profile.email,
             username: profile.username,
             state: profile.state,
-            isAdmin: isUserAdmin
+            isAdmin: profile.isAdmin,
+            isSuperAdmin: profile.isSuperAdmin,
+            calculatedIsAdmin: isUserAdmin
           });
         } catch (error) {
           console.error('Error parsing user profile:', error);
@@ -96,9 +98,10 @@ function Feed() {
         try {
           const profile = JSON.parse(savedProfile);
           userStateId = profile.state;
+          // Only superadmin@gmail.com with username ironlady is superadmin
           isUserAdmin = profile.isAdmin || 
                        profile.isSuperAdmin || 
-                       profile.email === SUPERADMIN_EMAIL ||
+                       (profile.email === SUPERADMIN_EMAIL && profile.username === 'ironlady') ||
                        profile.username === 'ironlady';
           console.log('Feed - User profile:', {
             email: profile.email,

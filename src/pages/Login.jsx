@@ -26,12 +26,28 @@ function Login() {
     }
 
     setLoading(true);
+    console.log('Login - Attempting login with:', {
+      username: formData.username,
+      email: formData.email
+    });
+    
     try {
       // Check for super admin login (ironlady / superadmin@gmail.com)
-      const isSuperAdminLogin = formData.username.toLowerCase().trim() === 'ironlady' && 
-                                formData.email.toLowerCase().trim() === 'superadmin@gmail.com';
+      const usernameLower = formData.username.toLowerCase().trim();
+      const emailLower = formData.email.toLowerCase().trim();
+      const isSuperAdminLogin = usernameLower === 'ironlady' && 
+                                emailLower === 'superadmin@gmail.com';
+      
+      console.log('Login - Super admin check:', {
+        usernameLower,
+        emailLower,
+        isSuperAdminLogin,
+        usernameMatch: usernameLower === 'ironlady',
+        emailMatch: emailLower === 'superadmin@gmail.com'
+      });
       
       if (isSuperAdminLogin) {
+        console.log('Login - Processing super admin login...');
         // Super admin login - create/update profile
         const superAdminProfile = {
           id: 'superadmin',
@@ -44,51 +60,110 @@ function Login() {
         };
         
         // Check if super admin exists in Firestore, if not create it
-        const superAdminQuery = query(
-          collection(db, 'users'),
-          where('email', '==', 'superadmin@gmail.com')
-        );
-        const superAdminSnapshot = await getDocs(superAdminQuery);
-        
-        if (superAdminSnapshot.empty) {
-          // Create super admin in Firestore
-          const { addDoc } = await import('firebase/firestore');
-          await addDoc(collection(db, 'users'), {
-            name: 'IronLady',
-            email: 'superadmin@gmail.com',
-            username: 'ironlady',
-            state: null,
-            isAdmin: true,
-            isSuperAdmin: true,
-            createdAt: new Date()
-          });
-        } else {
-          // Update existing super admin - ensure it's always super admin
-          const { updateDoc, doc } = await import('firebase/firestore');
-          const existingDoc = superAdminSnapshot.docs[0];
-          const existingData = existingDoc.data();
+        try {
+          console.log('Login - Checking Firestore for super admin...');
+          const superAdminQuery = query(
+            collection(db, 'users'),
+            where('email', '==', 'superadmin@gmail.com')
+          );
+          const superAdminSnapshot = await getDocs(superAdminQuery);
           
-          // Always update to ensure super admin status
-          await updateDoc(doc(db, 'users', existingDoc.id), {
-            name: 'IronLady',
-            email: 'superadmin@gmail.com',
-            username: 'ironlady',
-            state: null,
-            isAdmin: true,
-            isSuperAdmin: true,
-            updatedAt: new Date()
+          console.log('Login - Firestore query result:', {
+            empty: superAdminSnapshot.empty,
+            docsCount: superAdminSnapshot.docs.length
           });
-          superAdminProfile.id = existingDoc.id;
+          
+          if (superAdminSnapshot.empty) {
+            // Create super admin in Firestore
+            console.log('Login - Creating super admin in Firestore...');
+            const { addDoc } = await import('firebase/firestore');
+            const newDocRef = await addDoc(collection(db, 'users'), {
+              name: 'IronLady',
+              email: 'superadmin@gmail.com',
+              username: 'ironlady',
+              state: null,
+              isAdmin: true,
+              isSuperAdmin: true,
+              createdAt: new Date()
+            });
+            superAdminProfile.id = newDocRef.id;
+            console.log('Login - Super admin created in Firestore with ID:', newDocRef.id);
+            console.log('Login - Super admin data saved to Firestore:', {
+              id: newDocRef.id,
+              name: 'IronLady',
+              email: 'superadmin@gmail.com',
+              username: 'ironlady',
+              isAdmin: true,
+              isSuperAdmin: true
+            });
+          } else {
+            // Update existing super admin - ensure it's always super admin
+            console.log('Login - Updating existing super admin in Firestore...');
+            const { updateDoc, doc } = await import('firebase/firestore');
+            const existingDoc = superAdminSnapshot.docs[0];
+            const existingData = existingDoc.data();
+            
+            console.log('Login - Existing super admin data:', existingData);
+            
+            // Always update to ensure super admin status
+            await updateDoc(doc(db, 'users', existingDoc.id), {
+              name: 'IronLady',
+              email: 'superadmin@gmail.com',
+              username: 'ironlady',
+              state: null,
+              isAdmin: true,
+              isSuperAdmin: true,
+              updatedAt: new Date()
+            });
+            superAdminProfile.id = existingDoc.id;
+            console.log('Login - Super admin updated in Firestore with ID:', existingDoc.id);
+            console.log('Login - Super admin data updated in Firestore:', {
+              id: existingDoc.id,
+              name: 'IronLady',
+              email: 'superadmin@gmail.com',
+              username: 'ironlady',
+              isAdmin: true,
+              isSuperAdmin: true
+            });
+          }
+        } catch (firestoreError) {
+          console.error('Login - Firestore error:', firestoreError);
+          console.error('Login - Firestore error details:', {
+            code: firestoreError.code,
+            message: firestoreError.message
+          });
+          // Continue anyway - save to localStorage
+          console.log('Login - Continuing with localStorage only due to Firestore error');
         }
         
-        localStorage.setItem('userProfile', JSON.stringify(superAdminProfile));
-        window.dispatchEvent(new Event('profileUpdated'));
-        navigate('/feed');
-        setLoading(false);
+        // ALWAYS save to localStorage, even if Firestore fails
+        try {
+          localStorage.setItem('userProfile', JSON.stringify(superAdminProfile));
+          console.log('Login - Super admin profile saved to localStorage:', superAdminProfile);
+          
+          // Automatically authenticate superadmin for admin dashboard access
+          sessionStorage.setItem('adminAuthenticated', 'true');
+          console.log('Login - Super admin authenticated for admin dashboard');
+          
+          // Dispatch custom event to update other components
+          window.dispatchEvent(new Event('profileUpdated'));
+          
+          // Small delay to ensure localStorage is saved
+          await new Promise(resolve => setTimeout(resolve, 100));
+          
+          console.log('Login - Redirecting to feed...');
+          navigate('/feed');
+        } catch (localStorageError) {
+          console.error('Login - Error saving to localStorage:', localStorageError);
+          setError('Error saving profile. Please try again.');
+        } finally {
+          setLoading(false);
+        }
         return;
       }
 
       // Regular user login - search for user by username (case-insensitive)
+      console.log('Login - Attempting regular user login...');
       const usernameQuery = query(
         collection(db, 'users'),
         where('username', '==', formData.username.toLowerCase().trim())
@@ -96,6 +171,7 @@ function Login() {
       const usernameSnapshot = await getDocs(usernameQuery);
 
       if (usernameSnapshot.empty) {
+        console.log('Login - Username not found in Firestore');
         setError('Invalid username or email. Please check your credentials.');
         setLoading(false);
         return;
@@ -105,12 +181,25 @@ function Login() {
       const userDoc = usernameSnapshot.docs[0];
       const userData = userDoc.data();
       
+      console.log('Login - User found in Firestore:', {
+        username: userData.username,
+        email: userData.email,
+        isAdmin: userData.isAdmin,
+        isSuperAdmin: userData.isSuperAdmin
+      });
+      
       if (userData.email.toLowerCase().trim() !== formData.email.toLowerCase().trim()) {
+        console.log('Login - Email mismatch');
         setError('Invalid username or email. Please check your credentials.');
         setLoading(false);
         return;
       }
 
+      // IMPORTANT: Ensure only superadmin@gmail.com with username ironlady can be admin
+      // Remove admin status from any other account
+      const isActuallySuperAdmin = userData.email === 'superadmin@gmail.com' && 
+                                  userData.username === 'ironlady';
+      
       // Login successful - save profile to localStorage
       const profileData = {
         id: userDoc.id,
@@ -118,20 +207,49 @@ function Login() {
         email: userData.email,
         username: userData.username,
         state: userData.state,
-        isAdmin: userData.isAdmin || false,
-        isSuperAdmin: userData.isSuperAdmin || false
+        // Only set admin flags if this is the actual superadmin account
+        isAdmin: isActuallySuperAdmin ? true : false,
+        isSuperAdmin: isActuallySuperAdmin ? true : false
       };
 
+      // Update Firestore to ensure only superadmin has admin rights
+      if (!isActuallySuperAdmin && (userData.isAdmin || userData.isSuperAdmin)) {
+        console.log('Login - Removing admin status from non-superadmin account');
+        try {
+          const { updateDoc, doc } = await import('firebase/firestore');
+          await updateDoc(doc(db, 'users', userDoc.id), {
+            isAdmin: false,
+            isSuperAdmin: false,
+            updatedAt: new Date()
+          });
+        } catch (updateError) {
+          console.error('Login - Error updating admin status:', updateError);
+        }
+      }
+
       localStorage.setItem('userProfile', JSON.stringify(profileData));
+      console.log('Login - Regular user profile saved:', profileData);
+      
+      // Only set admin authentication for actual superadmin
+      if (isActuallySuperAdmin) {
+        sessionStorage.setItem('adminAuthenticated', 'true');
+        console.log('Login - Superadmin authenticated for admin dashboard');
+      }
       
       // Dispatch custom event to update other components
       window.dispatchEvent(new Event('profileUpdated'));
       
       // Redirect to feed
+      console.log('Login - Login successful, redirecting to feed');
       navigate('/feed');
     } catch (error) {
       console.error('Error during login:', error);
-      setError('An error occurred during login. Please try again.');
+      console.error('Error details:', {
+        message: error.message,
+        code: error.code,
+        stack: error.stack
+      });
+      setError(`Error during login: ${error.message || 'Please check your connection and try again.'}`);
     } finally {
       setLoading(false);
     }
@@ -220,7 +338,11 @@ function Login() {
             <input
               type="text"
               value={formData.username}
-              onChange={(e) => setFormData({ ...formData, username: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '') })}
+              onChange={(e) => {
+                const value = e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '');
+                setFormData({ ...formData, username: value });
+                console.log('Login - Username input:', value);
+              }}
               placeholder="Enter your username"
               required
               style={{

@@ -75,7 +75,7 @@ function TopNav() {
   };
 
   const getUserEmail = () => {
-    return userProfile?.email || 'admin@ironlady.com';
+    return userProfile?.email || 'superadmin@gmail.com';
   };
 
   const isUserAdmin = () => {

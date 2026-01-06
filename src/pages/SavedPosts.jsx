@@ -23,15 +23,15 @@ function SavedPosts({ user }) {
         profile = JSON.parse(savedProfile);
         setUserProfile(profile);
         setIsAdmin(profile.isAdmin || profile.isSuperAdmin || 
-                   profile.email === 'admin@ironlady.com' || 
-                   false);
+                   (profile.email === 'superadmin@gmail.com' && profile.username === 'ironlady') ||
+                   profile.username === 'ironlady');
         // Get userId - must match how PostCard stores bookmarks (userProfile?.id || user?.uid || 'guest')
         userId = profile.id || user?.uid || 'guest';
       } catch (error) {
         console.error('Error parsing user profile:', error);
       }
     } else if (isAdminAuthenticated) {
-      profile = { id: 'admin', name: 'IronLady', email: 'admin@ironlady.com', isAdmin: true };
+      profile = { id: 'admin', name: 'IronLady', email: 'superadmin@gmail.com', username: 'ironlady', isAdmin: true, isSuperAdmin: true };
       setUserProfile(profile);
       setIsAdmin(true);
       userId = user?.uid || 'admin';
