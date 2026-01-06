@@ -89,7 +89,8 @@ function Feed() {
 
       // Get user's state for filtering
       const savedProfile = localStorage.getItem('userProfile');
-      console.log('Feed - Saved profile exists:', !!savedProfile);
+      const isAdminAuthenticated = sessionStorage.getItem('adminAuthenticated') === 'true';
+      console.log('Feed - Saved profile exists:', !!savedProfile, 'Admin authenticated:', isAdminAuthenticated);
       let userStateId = null;
       let isUserAdmin = false;
       const SUPERADMIN_EMAIL = 'superadmin@gmail.com';
@@ -98,26 +99,33 @@ function Feed() {
         try {
           const profile = JSON.parse(savedProfile);
           userStateId = profile.state;
+          // Check if user is admin or superadmin
           // Only superadmin@gmail.com with username ironlady is superadmin
           isUserAdmin = profile.isAdmin || 
                        profile.isSuperAdmin || 
                        (profile.email === SUPERADMIN_EMAIL && profile.username === 'ironlady') ||
-                       profile.username === 'ironlady';
+                       profile.username === 'ironlady' ||
+                       isAdminAuthenticated;
           console.log('Feed - User profile:', {
             email: profile.email,
             username: profile.username,
             isAdmin: profile.isAdmin,
             isSuperAdmin: profile.isSuperAdmin,
             isUserAdmin: isUserAdmin,
+            isAdminAuthenticated: isAdminAuthenticated,
             state: userStateId
           });
         } catch (error) {
           console.error('Error parsing profile:', error);
         }
+      } else if (isAdminAuthenticated) {
+        // Admin authenticated via password but no profile
+        isUserAdmin = true;
+        console.log('Feed - Admin authenticated via sessionStorage, no profile');
       } else {
-        // No profile - not admin
+        // No profile and not admin authenticated - not admin
         isUserAdmin = false;
-        console.log('Feed - No profile found');
+        console.log('Feed - No profile found and not admin authenticated');
       }
 
       let q;
@@ -260,19 +268,26 @@ function Feed() {
           postsData = [];
         }
       } else {
-        // Admin sees all posts, but can filter by channel if selected
+        // ADMIN: See ALL posts from ALL states (no state filtering)
+        // Only filter by channel if selected, but show posts from all states
         if (selectedChannelId) {
           postsData = postsData.filter(post => {
             return post.channelId && post.channelId === selectedChannelId;
           });
-          console.log(`Admin filtered posts for channel: ${selectedChannelId}, showing ${postsData.length} posts`);
+          console.log(`Admin filtered posts for channel: ${selectedChannelId}, showing ${postsData.length} posts from all states`);
         } else {
-          console.log('Admin user - showing all posts');
+          console.log('Admin user - showing ALL posts from ALL states:', postsData.length);
         }
       }
       
-      // Limit to POSTS_PER_PAGE after filtering
-      postsData = postsData.slice(0, POSTS_PER_PAGE);
+      // For admins, show more posts since they see all states
+      // For regular users, limit to POSTS_PER_PAGE after filtering
+      if (!isUserAdmin) {
+        postsData = postsData.slice(0, POSTS_PER_PAGE);
+      } else {
+        // Admins can see more posts (3x limit)
+        postsData = postsData.slice(0, POSTS_PER_PAGE * 3);
+      }
       
       console.log('Feed - Loaded posts:', postsData.length, 'isAdmin:', isUserAdmin, 'userState:', userStateId);
       console.log('Feed - Setting posts state with', postsData.length, 'posts');
@@ -428,8 +443,10 @@ function Feed() {
       
       // Get user's state for filtering
       const savedProfile = localStorage.getItem('userProfile');
+      const isAdminAuthenticated = sessionStorage.getItem('adminAuthenticated') === 'true';
       let userStateId = null;
       let isUserAdmin = false;
+      const SUPERADMIN_EMAIL = 'superadmin@gmail.com';
       
       if (savedProfile) {
         try {
@@ -437,13 +454,17 @@ function Feed() {
           userStateId = profile.state;
           isUserAdmin = profile.isAdmin || 
                        profile.isSuperAdmin || 
-                       profile.email === 'superadmin@gmail.com' || 
-                       profile.username === 'ironlady';
+                       (profile.email === SUPERADMIN_EMAIL && profile.username === 'ironlady') ||
+                       profile.username === 'ironlady' ||
+                       isAdminAuthenticated;
         } catch (error) {
           console.error('Error parsing profile:', error);
         }
+      } else if (isAdminAuthenticated) {
+        // Admin authenticated via password
+        isUserAdmin = true;
       } else {
-        isUserAdmin = false; // No profile - not admin
+        isUserAdmin = false; // No profile and not admin authenticated - not admin
       }
       
       // Only update if we're on latest sort and at the top

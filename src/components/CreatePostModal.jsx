@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { FiX } from 'react-icons/fi';
+import { useState, useEffect, useRef } from 'react';
+import { FiX, FiBold, FiItalic, FiLink, FiType } from 'react-icons/fi';
 import { collection, query, onSnapshot, addDoc, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../firebase/config';
@@ -70,6 +70,10 @@ function CreatePostModal({ isOpen, onClose }) {
   const [states, setStates] = useState([]);
   const [channels, setChannels] = useState([]);
   const [isAdmin, setIsAdmin] = useState(false);
+  const contentEditableRef = useRef(null);
+  const [showLinkInput, setShowLinkInput] = useState(false);
+  const [linkUrl, setLinkUrl] = useState('');
+  const [linkText, setLinkText] = useState('');
 
   useEffect(() => {
     if (!isOpen) {
@@ -80,11 +84,19 @@ function CreatePostModal({ isOpen, onClose }) {
       setCategory('');
       setStateId('');
       setChannelId('');
+      setIsAnnouncement(false);
+      setShowLinkInput(false);
+      setLinkUrl('');
+      setLinkText('');
+      if (contentEditableRef.current) {
+        contentEditableRef.current.innerHTML = '';
+      }
       return;
     }
 
     // Get user profile to filter states
     const savedProfile = localStorage.getItem('userProfile');
+    const isAdminAuthenticated = sessionStorage.getItem('adminAuthenticated') === 'true';
     let userStateId = null;
     let userIsAdmin = false;
     const SUPERADMIN_EMAIL = 'superadmin@gmail.com';
@@ -97,12 +109,13 @@ function CreatePostModal({ isOpen, onClose }) {
         userIsAdmin = profile.isAdmin || 
                      profile.isSuperAdmin || 
                      (profile.email === SUPERADMIN_EMAIL && profile.username === 'ironlady') ||
-                     profile.username === 'ironlady';
+                     profile.username === 'ironlady' ||
+                     isAdminAuthenticated;
       } catch (error) {
         console.error('Error parsing profile:', error);
       }
-    } else {
-      // No profile = default IronLady account = admin
+    } else if (isAdminAuthenticated) {
+      // Admin authenticated via password
       userIsAdmin = true;
     }
     
@@ -197,25 +210,41 @@ function CreatePostModal({ isOpen, onClose }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
+    // Get content from rich text editor or textarea
+    const finalContent = contentEditableRef.current 
+      ? (contentEditableRef.current.innerHTML.trim() || contentEditableRef.current.innerText.trim())
+      : content.trim();
+    
     // Validation
-    if (!content.trim()) {
+    if (!finalContent) {
       alert('Please enter post content');
       return;
     }
     
     // Get user profile
     const savedProfile = localStorage.getItem('userProfile');
+    const isAdminAuthenticated = sessionStorage.getItem('adminAuthenticated') === 'true';
+    const SUPERADMIN_EMAIL = 'superadmin@gmail.com';
+    
     let userIsAdmin = false;
     let userStateId = null;
     
     if (savedProfile) {
       try {
         const profile = JSON.parse(savedProfile);
-        userIsAdmin = profile.isAdmin || false;
+        // Check if user is admin or superadmin
+        userIsAdmin = profile.isAdmin || 
+                     profile.isSuperAdmin || 
+                     (profile.email === SUPERADMIN_EMAIL && profile.username === 'ironlady') ||
+                     profile.username === 'ironlady' ||
+                     isAdminAuthenticated;
         userStateId = profile.state;
       } catch (error) {
         console.error('Error parsing profile:', error);
       }
+    } else if (isAdminAuthenticated) {
+      // Admin authenticated via password
+      userIsAdmin = true;
     }
     
     // For announcements, state and channel are not required
@@ -230,7 +259,7 @@ function CreatePostModal({ isOpen, onClose }) {
         return;
       }
       
-      // Regular users can only post in their own state
+      // Regular users can only post in their own state, but admins can post in any state
       if (!userIsAdmin && userStateId && stateId !== userStateId) {
         alert('You can only post in your own state. Contact admin to access other states.');
         return;
@@ -270,30 +299,44 @@ function CreatePostModal({ isOpen, onClose }) {
       }
 
       // Get user profile for author info (fast operation)
-      const savedProfile = localStorage.getItem('userProfile');
+      const savedProfileForAuthor = localStorage.getItem('userProfile');
+      const isAdminAuth = sessionStorage.getItem('adminAuthenticated') === 'true';
+      const SUPERADMIN_EMAIL_CHECK = 'superadmin@gmail.com';
+      
       let authorInfo = {
-        uid: user?.uid || 'guest',
-        name: user?.displayName || 'IronLady',
-        email: user?.email || '',
+        uid: 'guest',
+        name: 'IronLady',
+        email: '',
         isAdmin: false
       };
       
-      if (savedProfile) {
+      if (savedProfileForAuthor) {
         try {
-          const profile = JSON.parse(savedProfile);
+          const profile = JSON.parse(savedProfileForAuthor);
           authorInfo = {
-            uid: profile.id || user?.uid || 'guest',
-            name: profile.name || user?.displayName || 'IronLady',
-            email: profile.email || user?.email || '',
-            isAdmin: profile.isAdmin || false
+            uid: profile.id || 'guest',
+            name: profile.name || 'IronLady',
+            email: profile.email || '',
+            isAdmin: profile.isAdmin || 
+                    profile.isSuperAdmin || 
+                    (profile.email === SUPERADMIN_EMAIL_CHECK && profile.username === 'ironlady') ||
+                    profile.username === 'ironlady' ||
+                    isAdminAuth
           };
         } catch (error) {
           console.error('Error parsing profile:', error);
         }
+      } else if (isAdminAuth) {
+        authorInfo = {
+          uid: 'admin',
+          name: 'IronLady',
+          email: 'superadmin@gmail.com',
+          isAdmin: true
+        };
       }
 
       // Check if user is admin (for announcements)
-      const userIsAdmin = authorInfo.isAdmin || user?.isAdmin || false;
+      const userIsAdmin = authorInfo.isAdmin || isAdminAuth;
       const makeAnnouncement = isAnnouncement && userIsAdmin;
 
       // Compress and upload image to Firebase Storage, and also store in Firestore
@@ -376,11 +419,16 @@ function CreatePostModal({ isOpen, onClose }) {
         }
       }
 
+      // Get final content (HTML from rich text editor or plain text)
+      const finalContent = contentEditableRef.current 
+        ? contentEditableRef.current.innerHTML.trim()
+        : content.trim();
+      
       // Create post with image URL and base64 (stored in Firestore database)
       // IMPORTANT: stateId and channelId are REQUIRED for regular posts (not announcements)
       // This ensures posts are only visible to members of that state
       const postData = {
-        content: content.trim(),
+        content: finalContent,
         category: makeAnnouncement ? 'Announcement' : (category || selectedChannel?.name || 'General'),
         stateId: makeAnnouncement ? null : (stateId || null), // null for announcements, required for regular posts
         channelId: makeAnnouncement ? null : (channelId || null), // null for announcements, required for regular posts
@@ -460,6 +508,150 @@ function CreatePostModal({ isOpen, onClose }) {
 
   const availableChannels = stateId ? getChannelsByState(stateId) : [];
 
+  // Formatting functions
+  const formatText = (command, value = null) => {
+    document.execCommand(command, false, value);
+    contentEditableRef.current?.focus();
+  };
+
+  const handleBold = () => {
+    formatText('bold');
+  };
+
+  const handleItalic = () => {
+    formatText('italic');
+  };
+
+  const handleLink = () => {
+    if (showLinkInput) {
+      // Insert link
+      if (linkUrl && linkText) {
+        if (!contentEditableRef.current) {
+          alert('Editor not ready. Please try again.');
+          return;
+        }
+
+        // Ensure URL has protocol
+        let finalUrl = linkUrl.trim();
+        if (!finalUrl.startsWith('http://') && !finalUrl.startsWith('https://')) {
+          finalUrl = 'https://' + finalUrl;
+        }
+
+        // Get selection or cursor position - ensure it's within the editor
+        const selection = window.getSelection();
+        let range;
+        
+        // Ensure selection is within the contentEditable element
+        if (selection.rangeCount > 0) {
+          range = selection.getRangeAt(0);
+          // Check if range is within the editor
+          if (!contentEditableRef.current.contains(range.commonAncestorContainer)) {
+            // Range is outside editor, create new range at end
+            range = document.createRange();
+            range.selectNodeContents(contentEditableRef.current);
+            range.collapse(false);
+          }
+        } else {
+          // Create range at end of content
+          range = document.createRange();
+          range.selectNodeContents(contentEditableRef.current);
+          range.collapse(false);
+        }
+        
+        // Ensure we're working with the editor
+        if (!contentEditableRef.current.contains(range.commonAncestorContainer)) {
+          range = document.createRange();
+          range.selectNodeContents(contentEditableRef.current);
+          range.collapse(false);
+        }
+
+        // Create link element with proper styling
+        const linkElement = document.createElement('a');
+        linkElement.href = finalUrl;
+        linkElement.target = '_blank';
+        linkElement.rel = 'noopener noreferrer';
+        linkElement.textContent = linkText;
+        linkElement.style.color = '#6b46c1';
+        linkElement.style.textDecoration = 'underline';
+        linkElement.style.cursor = 'pointer';
+        linkElement.className = 'inserted-link';
+        
+        try {
+          // Insert link at cursor position
+          range.deleteContents();
+          range.insertNode(linkElement);
+          
+          // Add a space after the link for better UX
+          const spaceNode = document.createTextNode(' ');
+          range.setStartAfter(linkElement);
+          range.insertNode(spaceNode);
+          
+          // Move cursor after the space
+          range.setStartAfter(spaceNode);
+          range.collapse(true);
+          selection.removeAllRanges();
+          selection.addRange(range);
+          
+          // Force update the editor content and make link visible
+          if (contentEditableRef.current) {
+            // Force a visual update by focusing
+            contentEditableRef.current.focus();
+            
+            // Trigger input event to update state
+            const inputEvent = new Event('input', { bubbles: true });
+            contentEditableRef.current.dispatchEvent(inputEvent);
+            
+            // Also manually update content state and verify link is there
+            setTimeout(() => {
+              if (contentEditableRef.current) {
+                const htmlContent = contentEditableRef.current.innerHTML;
+                const textContent = contentEditableRef.current.innerText;
+                setContent(textContent);
+                
+                // Verify link was inserted
+                const links = contentEditableRef.current.querySelectorAll('a');
+                console.log('Link insertion complete!');
+                console.log('Total links in editor:', links.length);
+                console.log('Editor HTML:', htmlContent);
+                console.log('Editor Text:', textContent);
+                
+                if (links.length === 0) {
+                  console.warn('Warning: Link was not found in editor after insertion');
+                } else {
+                  console.log('Link found:', links[links.length - 1].outerHTML);
+                }
+              }
+            }, 50);
+          }
+        } catch (error) {
+          console.error('Error inserting link:', error);
+          alert('Error inserting link: ' + error.message + '. Please try again.');
+          return;
+        }
+        
+        // Close link input
+        setShowLinkInput(false);
+        setLinkUrl('');
+        setLinkText('');
+        
+        // Focus editor
+        contentEditableRef.current?.focus();
+      } else {
+        alert('Please enter both link text and URL');
+      }
+    } else {
+      setShowLinkInput(true);
+    }
+  };
+
+  const handleContentChange = (e) => {
+    if (contentEditableRef.current) {
+      setContent(contentEditableRef.current.innerText);
+    } else {
+      setContent(e.target.value);
+    }
+  };
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
@@ -472,13 +664,103 @@ function CreatePostModal({ isOpen, onClose }) {
         <form onSubmit={handleSubmit}>
           <div className="form-group">
             <label className="form-label">Content</label>
+            <div className="rich-text-toolbar">
+              <button
+                type="button"
+                className="format-btn"
+                onClick={handleBold}
+                title="Bold (Ctrl+B)"
+              >
+                <FiBold />
+              </button>
+              <button
+                type="button"
+                className="format-btn"
+                onClick={handleItalic}
+                title="Italic (Ctrl+I)"
+              >
+                <FiItalic />
+              </button>
+              <button
+                type="button"
+                className="format-btn"
+                onClick={handleLink}
+                title="Insert Link"
+              >
+                <FiLink />
+              </button>
+            </div>
+            {showLinkInput && (
+              <div className="link-input-container">
+                <input
+                  type="text"
+                  placeholder="Link text (e.g., Click here)"
+                  value={linkText}
+                  onChange={(e) => setLinkText(e.target.value)}
+                  className="link-input"
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      document.getElementById('link-url-input')?.focus();
+                    }
+                  }}
+                />
+                <div className="link-input-row">
+                  <input
+                    id="link-url-input"
+                    type="url"
+                    placeholder="https://example.com"
+                    value={linkUrl}
+                    onChange={(e) => setLinkUrl(e.target.value)}
+                    className="link-input"
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleLink();
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="link-btn"
+                    onClick={handleLink}
+                  >
+                    Insert
+                  </button>
+                  <button
+                    type="button"
+                    className="link-btn-cancel"
+                    onClick={() => {
+                      setShowLinkInput(false);
+                      setLinkUrl('');
+                      setLinkText('');
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+            <div
+              ref={contentEditableRef}
+              className="rich-text-editor"
+              contentEditable
+              onInput={handleContentChange}
+              data-placeholder="What's on your mind? You can use formatting: **bold**, *italic*, or add links!"
+              suppressContentEditableWarning={true}
+            />
             <textarea
               className="form-textarea"
               value={content}
               onChange={(e) => setContent(e.target.value)}
               placeholder="What's on your mind?"
               required
+              style={{ display: 'none' }}
             />
+            <div className="formatting-hint">
+              <FiType style={{ marginRight: '5px' }} />
+              <span>Tip: Use the toolbar above to format your text. Links will open in a new tab.</span>
+            </div>
           </div>
           {isAdmin && (
             <div className="form-group">
@@ -629,7 +911,7 @@ function CreatePostModal({ isOpen, onClose }) {
             <button 
               type="submit" 
               className="btn btn-primary" 
-              disabled={uploading || (!isAnnouncement && (!stateId || !channelId)) || !content.trim()}
+              disabled={uploading || (!isAnnouncement && (!stateId || !channelId)) || (!contentEditableRef.current?.innerText.trim() && !content.trim())}
             >
               {uploading ? (image ? 'Uploading image...' : 'Posting...') : (isAnnouncement ? 'Post Announcement' : 'Post')}
             </button>

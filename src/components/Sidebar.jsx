@@ -255,10 +255,7 @@ function Sidebar() {
           <div className="feed-icon-wrapper">
             <FiHome />
           </div>
-          <div className="feed-nav-content">
-            <span className="feed-nav-title">Community Feed</span>
-            <span className="feed-nav-subtitle">Discover & Connect</span>
-          </div>
+          <span className="feed-nav-title">Community Feed</span>
         </Link>
       </div>
 
