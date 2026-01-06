@@ -17,8 +17,8 @@ function App() {
   return (
     <Router>
       <Routes>
+        <Route path="/" element={<Login />} />
         <Route path="/login" element={<Login />} />
-        <Route path="/" element={<UserProfile />} />
         <Route path="/profile" element={<UserProfile />} />
         <Route path="/feed" element={
           <Layout>
@@ -70,6 +70,8 @@ function App() {
             </ProtectedRoute>
           </Layout>
         } />
+        {/* Catch-all route - redirect to login if route doesn't exist */}
+        <Route path="*" element={<Login />} />
       </Routes>
     </Router>
   );

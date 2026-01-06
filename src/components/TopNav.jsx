@@ -194,7 +194,7 @@ function TopNav() {
       // Dispatch custom event to update other components
       window.dispatchEvent(new Event('profileUpdated'));
       // Redirect to login page
-      navigate('/login');
+      navigate('/');
     }
   };
 

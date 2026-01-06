@@ -13,21 +13,8 @@ function Login() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    // Check if user is already logged in
-    const savedProfile = localStorage.getItem('userProfile');
-    if (savedProfile) {
-      try {
-        const profile = JSON.parse(savedProfile);
-        if (profile.username && profile.email) {
-          // User is already logged in, redirect to feed
-          navigate('/feed');
-        }
-      } catch (error) {
-        console.error('Error parsing saved profile:', error);
-      }
-    }
-  }, [navigate]);
+  // Removed auto-redirect - login page should always show first
+  // Users can manually log in, and ProtectedRoute will handle access to protected routes
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -340,7 +327,7 @@ function Login() {
             Don't have an account?
           </p>
           <button
-            onClick={() => navigate('/')}
+            onClick={() => navigate('/profile')}
             style={{
               background: 'transparent',
               border: '2px solid white',

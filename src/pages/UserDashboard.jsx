@@ -77,7 +77,7 @@ function UserDashboard({ user }) {
         channelsUnsubscribe();
       };
     } else {
-      // No profile, redirect to profile creation
+      // No profile, redirect to login
       navigate('/');
       setLoading(false);
     }

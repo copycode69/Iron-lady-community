@@ -55,7 +55,7 @@ function ProtectedRoute({ children }) {
   }
 
   if (!hasProfile) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/" replace />;
   }
 
   return children;
