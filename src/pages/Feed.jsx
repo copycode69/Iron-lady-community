@@ -10,6 +10,7 @@ function Feed() {
   console.log('Feed - Component rendered');
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedChannelId = searchParams.get('channel') || null;
+  const selectedUserId = searchParams.get('user') || null;
   const [posts, setPosts] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -21,6 +22,7 @@ function Feed() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [sortBy, setSortBy] = useState('latest');
   const [selectedChannelName, setSelectedChannelName] = useState(null);
+  const [selectedUserName, setSelectedUserName] = useState(null);
   const POSTS_PER_PAGE = 20;
   
   console.log('Feed - Current state:', {
@@ -280,6 +282,15 @@ function Feed() {
         }
       }
       
+      // USER FILTERING: If a user is selected from search, filter by user
+      if (selectedUserId) {
+        postsData = postsData.filter(post => {
+          const postAuthorId = post.author?.id || post.author?.uid;
+          return postAuthorId === selectedUserId;
+        });
+        console.log(`Filtered posts for user: ${selectedUserId}, showing ${postsData.length} posts`);
+      }
+      
       // For admins, show more posts since they see all states
       // For regular users, limit to POSTS_PER_PAGE after filtering
       if (!isUserAdmin) {
@@ -333,7 +344,7 @@ function Feed() {
         alert(`Error loading posts: ${error.message || 'Please check your connection and try again.'}`);
       }
     }
-  }, [sortBy, lastPost, selectedChannelId]);
+  }, [sortBy, lastPost, selectedChannelId, selectedUserId]);
 
   // Fetch channel name when channel ID changes
   useEffect(() => {
@@ -358,6 +369,28 @@ function Feed() {
       setSelectedChannelName(null);
     }
   }, [selectedChannelId]);
+
+  // Fetch user name when user ID changes
+  useEffect(() => {
+    if (selectedUserId) {
+      const fetchUserName = async () => {
+        try {
+          const userDoc = await getDoc(doc(db, 'users', selectedUserId));
+          if (userDoc.exists()) {
+            setSelectedUserName(userDoc.data().name || 'Unknown User');
+          } else {
+            setSelectedUserName(null);
+          }
+        } catch (error) {
+          console.error('Error fetching user name:', error);
+          setSelectedUserName(null);
+        }
+      };
+      fetchUserName();
+    } else {
+      setSelectedUserName(null);
+    }
+  }, [selectedUserId]);
 
   useEffect(() => {
     // Load initial posts
@@ -393,7 +426,7 @@ function Feed() {
     return () => {
       clearTimeout(timeoutId);
     };
-  }, [sortBy, selectedChannelId, loadPosts]);
+  }, [sortBy, selectedChannelId, selectedUserId, loadPosts]);
 
   // Fetch announcements separately (always visible at top)
   useEffect(() => {
@@ -593,18 +626,24 @@ function Feed() {
               - {selectedChannelName}
             </span>
           )}
+          {selectedUserName && (
+            <span style={{ fontSize: '18px', fontWeight: 400, color: '#6b7280', marginLeft: '10px' }}>
+              - Posts by {selectedUserName}
+            </span>
+          )}
         </h1>
         <div className="feed-controls">
-          {selectedChannelId && (
+          {(selectedChannelId || selectedUserId) && (
             <button 
               className="btn btn-secondary" 
               onClick={() => {
                 setSearchParams({});
                 setSelectedChannelName(null);
+                setSelectedUserName(null);
               }}
               style={{ marginRight: '10px', fontSize: '14px', padding: '8px 16px' }}
             >
-              Show All Channels
+              {selectedChannelId ? 'Show All Channels' : 'Show All Posts'}
             </button>
           )}
           <select 

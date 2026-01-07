@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { FiSearch, FiBell, FiMessageCircle, FiBookmark, FiChevronDown, FiLogOut, FiUser, FiSettings } from 'react-icons/fi';
 import MessageModal from './MessageModal';
 import NotificationModal from './NotificationModal';
+import SearchModal from './SearchModal';
 import { collection, query, onSnapshot, orderBy, limit, where } from 'firebase/firestore';
 import { db } from '../firebase/config';
 
@@ -13,9 +14,12 @@ function TopNav() {
   const [userProfile, setUserProfile] = useState(null);
   const [isMessageModalOpen, setIsMessageModalOpen] = useState(false);
   const [isNotificationModalOpen, setIsNotificationModalOpen] = useState(false);
+  const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const [unreadMessageCount, setUnreadMessageCount] = useState(0);
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
   const dropdownRef = useRef(null);
+  const searchInputRef = useRef(null);
 
   useEffect(() => {
     // Get user profile from localStorage
@@ -216,9 +220,23 @@ function TopNav() {
       </div>
 
       <div className="nav-right">
-        <div className="search-bar">
+        <div className="search-bar" onClick={() => setIsSearchModalOpen(true)}>
           <FiSearch />
-          <input type="text" placeholder="Search..." />
+          <input 
+            ref={searchInputRef}
+            type="text" 
+            placeholder="Search posts, users..." 
+            value={searchQuery}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              setIsSearchModalOpen(true);
+            }}
+            onFocus={() => setIsSearchModalOpen(true)}
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsSearchModalOpen(true);
+            }}
+          />
         </div>
         <div 
           className="nav-icon" 
@@ -355,6 +373,15 @@ function TopNav() {
       <NotificationModal
         isOpen={isNotificationModalOpen}
         onClose={() => setIsNotificationModalOpen(false)}
+      />
+
+      <SearchModal
+        isOpen={isSearchModalOpen}
+        onClose={() => {
+          setIsSearchModalOpen(false);
+          setSearchQuery('');
+        }}
+        searchQuery={searchQuery}
       />
     </div>
   );
