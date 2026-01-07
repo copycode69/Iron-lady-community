@@ -3,6 +3,7 @@ import { collection, query, orderBy, limit, startAfter, getDocs, addDoc, serverT
 import { db } from '../firebase/config';
 import { FiPlus, FiCalendar, FiMapPin, FiClock, FiUsers, FiTrash2, FiX } from 'react-icons/fi';
 import { format } from 'date-fns';
+import ViewEventModal from '../components/ViewEventModal';
 
 function Events() {
   const [events, setEvents] = useState([]);
@@ -11,6 +12,8 @@ function Events() {
   const [hasMore, setHasMore] = useState(true);
   const [lastEvent, setLastEvent] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+  const [selectedEvent, setSelectedEvent] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [filter, setFilter] = useState('all'); // all, upcoming, past
   const [formData, setFormData] = useState({
@@ -311,7 +314,23 @@ function Events() {
                 className="stat-card"
                 style={{ 
                   position: 'relative',
-                  opacity: isPastEvent(event.date) ? 0.7 : 1
+                  opacity: isPastEvent(event.date) ? 0.7 : 1,
+                  cursor: 'pointer',
+                  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+                }}
+                onClick={() => {
+                  setSelectedEvent(event);
+                  setIsViewModalOpen(true);
+                }}
+                onMouseEnter={(e) => {
+                  if (!isPastEvent(event.date)) {
+                    e.currentTarget.style.transform = 'translateY(-4px)';
+                    e.currentTarget.style.boxShadow = '0 8px 16px rgba(0, 0, 0, 0.1)';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.05)';
                 }}
               >
                 {isPastEvent(event.date) && (
@@ -390,7 +409,22 @@ function Events() {
                   <button 
                     className="btn btn-primary" 
                     style={{ flex: 1, fontSize: '14px', padding: '10px' }}
-                    onClick={() => handleJoinEvent(event.id)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedEvent(event);
+                      setIsViewModalOpen(true);
+                    }}
+                  >
+                    View Details
+                  </button>
+                  <button 
+                    className="btn btn-primary" 
+                    style={{ fontSize: '14px', padding: '10px' }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleJoinEvent(event.id);
+                    }}
+                    disabled={isPastEvent(event.date) || (event.maxAttendees && event.attendees?.length >= event.maxAttendees)}
                   >
                     Join Event
                   </button>
@@ -400,7 +434,9 @@ function Events() {
                     if (savedProfile) {
                       try {
                         const profile = JSON.parse(savedProfile);
-                        const isAdmin = profile.isAdmin || false;
+                        const isAdmin = profile.isAdmin || profile.isSuperAdmin || 
+                                       profile.email === 'superadmin@gmail.com' || 
+                                       profile.username === 'ironlady';
                         const isCreator = event.createdBy?.email === profile.email;
                         canDelete = isAdmin || isCreator;
                       } catch (error) {
@@ -410,7 +446,10 @@ function Events() {
                     return canDelete ? (
                       <button 
                         className="action-btn btn-delete"
-                        onClick={() => handleDelete(event.id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDelete(event.id);
+                        }}
                         style={{ padding: '10px' }}
                         title="Delete event"
                       >
@@ -529,6 +568,17 @@ function Events() {
           </div>
         </div>
       )}
+
+      {/* View Event Modal */}
+      <ViewEventModal
+        isOpen={isViewModalOpen}
+        onClose={() => {
+          setIsViewModalOpen(false);
+          setSelectedEvent(null);
+        }}
+        event={selectedEvent}
+        onJoin={handleJoinEvent}
+      />
     </div>
   );
 }

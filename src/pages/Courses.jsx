@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { collection, query, orderBy, limit, startAfter, getDocs, addDoc, serverTimestamp, deleteDoc, doc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import { FiPlus, FiBook, FiClock, FiUsers, FiStar, FiTrash2, FiPlay, FiX } from 'react-icons/fi';
+import { FiPlus, FiBook, FiClock, FiUsers, FiStar, FiTrash2, FiPlay, FiX, FiImage, FiLink, FiEdit2 } from 'react-icons/fi';
+import ViewCourseModal from '../components/ViewCourseModal';
 
 function Courses() {
   const [courses, setCourses] = useState([]);
@@ -10,6 +11,9 @@ function Courses() {
   const [hasMore, setHasMore] = useState(true);
   const [lastCourse, setLastCourse] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+  const [selectedCourse, setSelectedCourse] = useState(null);
+  const [editingCourse, setEditingCourse] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [filter, setFilter] = useState('all'); // all, beginner, intermediate, advanced
   const [formData, setFormData] = useState({
@@ -18,7 +22,10 @@ function Courses() {
     instructor: '',
     duration: '',
     level: 'Beginner',
-    price: ''
+    price: '',
+    mrp: '',
+    imageUrl: '',
+    link: ''
   });
   const COURSES_PER_PAGE = 20;
 
@@ -147,21 +154,50 @@ function Courses() {
         return;
       }
 
-      await addDoc(collection(db, 'courses'), {
-        ...formData,
-        students: [],
-        rating: 0,
-        reviews: 0,
-        createdBy: creatorInfo,
-        createdAt: serverTimestamp()
-      });
+      if (editingCourse) {
+        // Update existing course
+        const courseRef = doc(db, 'courses', editingCourse.id);
+        await updateDoc(courseRef, {
+          title: formData.title,
+          description: formData.description,
+          instructor: formData.instructor,
+          duration: formData.duration,
+          level: formData.level,
+          price: formData.price ? parseFloat(formData.price) || 0 : 0,
+          mrp: formData.mrp ? parseFloat(formData.mrp) || 0 : 0,
+          imageUrl: formData.imageUrl || null,
+          link: formData.link || null,
+          updatedAt: serverTimestamp()
+        });
+        alert('Course updated successfully!');
+        setEditingCourse(null);
+      } else {
+        // Create new course
+        await addDoc(collection(db, 'courses'), {
+          ...formData,
+          price: formData.price ? parseFloat(formData.price) || 0 : 0,
+          mrp: formData.mrp ? parseFloat(formData.mrp) || 0 : 0,
+          imageUrl: formData.imageUrl || null,
+          link: formData.link || null,
+          students: [],
+          rating: 0,
+          reviews: 0,
+          createdBy: creatorInfo,
+          createdAt: serverTimestamp()
+        });
+        alert('Course created successfully!');
+      }
+      
       setFormData({
         title: '',
         description: '',
         instructor: '',
         duration: '',
         level: 'Beginner',
-        price: ''
+        price: '',
+        mrp: '',
+        imageUrl: '',
+        link: ''
       });
       setIsModalOpen(false);
       // Reload courses
@@ -169,9 +205,26 @@ function Courses() {
       setHasMore(true);
       loadCourses(true);
     } catch (error) {
-      console.error('Error creating course:', error);
-      alert('Error creating course');
+      console.error('Error saving course:', error);
+      alert(`Error ${editingCourse ? 'updating' : 'creating'} course`);
     }
+  };
+
+  const handleEdit = (course) => {
+    setEditingCourse(course);
+    setFormData({
+      title: course.title || '',
+      description: course.description || '',
+      instructor: course.instructor || '',
+      duration: course.duration || '',
+      level: course.level || 'Beginner',
+      price: course.price ? course.price.toString() : '',
+      mrp: course.mrp ? course.mrp.toString() : '',
+      imageUrl: course.imageUrl || '',
+      link: course.link || ''
+    });
+    setIsViewModalOpen(false);
+    setIsModalOpen(true);
   };
 
   const handleEnroll = async (courseId) => {
@@ -291,151 +344,328 @@ function Courses() {
         </div>
       ) : (
         <>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '20px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))', gap: '24px' }}>
             {courses.map((course) => (
-              <div key={course.id} className="stat-card" style={{ position: 'relative' }}>
-                <div style={{ display: 'flex', alignItems: 'start', gap: '15px', marginBottom: '15px' }}>
-                  <div style={{
-                    width: '60px',
-                    height: '60px',
-                    background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
-                    borderRadius: '12px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: 'white',
-                    fontSize: '24px',
-                    fontWeight: 'bold',
-                    flexShrink: 0
-                  }}>
-                    <FiBook />
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <h3 style={{ fontSize: '20px', fontWeight: 700, color: '#1f2937', marginBottom: '8px' }}>
-                      {course.title}
-                    </h3>
-                    <p style={{ color: '#6b7280', fontSize: '14px', lineHeight: '1.5', marginBottom: '8px' }}>
-                      {course.description || 'No description provided'}
-                    </p>
-                    {course.instructor && (
-                      <p style={{ color: '#6b7280', fontSize: '12px' }}>
-                        by {course.instructor}
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                <div style={{ 
-                  display: 'flex', 
-                  gap: '8px', 
-                  marginBottom: '15px',
-                  flexWrap: 'wrap'
+              <div 
+                key={course.id} 
+                style={{ 
+                  position: 'relative',
+                  cursor: 'pointer',
+                  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                  background: 'white',
+                  borderRadius: '16px',
+                  overflow: 'hidden',
+                  border: '1px solid #e5e7eb',
+                  boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
+                  display: 'flex',
+                  flexDirection: 'column'
+                }}
+                onClick={() => {
+                  setSelectedCourse(course);
+                  setIsViewModalOpen(true);
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = 'translateY(-6px)';
+                  e.currentTarget.style.boxShadow = '0 12px 24px rgba(0, 0, 0, 0.12)';
+                  e.currentTarget.style.borderColor = '#c7d2fe';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.08)';
+                  e.currentTarget.style.borderColor = '#e5e7eb';
+                }}
+              >
+                {/* Course Image/Header */}
+                <div style={{
+                  width: '100%',
+                  height: '180px',
+                  background: course.imageUrl 
+                    ? 'transparent' 
+                    : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                  position: 'relative',
+                  overflow: 'hidden'
                 }}>
+                  {course.imageUrl ? (
+                    <img 
+                      src={course.imageUrl} 
+                      alt={course.title}
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'cover'
+                      }}
+                      onError={(e) => {
+                        e.target.style.display = 'none';
+                        e.target.parentElement.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+                      }}
+                    />
+                  ) : (
+                    <div style={{
+                      width: '100%',
+                      height: '100%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: 'white'
+                    }}>
+                      <FiBook size={48} />
+                    </div>
+                  )}
                   {course.level && (
-                    <span style={{
-                      background: getLevelColor(course.level) + '20',
-                      color: getLevelColor(course.level),
-                      padding: '4px 12px',
-                      borderRadius: '12px',
+                    <div style={{
+                      position: 'absolute',
+                      top: '12px',
+                      right: '12px',
+                      background: getLevelColor(course.level),
+                      color: 'white',
+                      padding: '6px 14px',
+                      borderRadius: '20px',
                       fontSize: '12px',
-                      fontWeight: 600
+                      fontWeight: 700,
+                      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.2)'
                     }}>
                       {course.level}
-                    </span>
-                  )}
-                  {course.duration && (
-                    <span style={{
-                      background: '#f3f4f6',
-                      color: '#374151',
-                      padding: '4px 12px',
-                      borderRadius: '12px',
-                      fontSize: '12px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '4px'
-                    }}>
-                      <FiClock style={{ fontSize: '10px' }} />
-                      {course.duration}
-                    </span>
-                  )}
-                  {course.students && (
-                    <span style={{
-                      background: '#f3f4f6',
-                      color: '#374151',
-                      padding: '4px 12px',
-                      borderRadius: '12px',
-                      fontSize: '12px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '4px'
-                    }}>
-                      <FiUsers style={{ fontSize: '10px' }} />
-                      {course.students.length || 0}
-                    </span>
+                    </div>
                   )}
                 </div>
 
-                {course.rating > 0 && (
+                {/* Course Content */}
+                <div style={{ padding: '20px', flex: 1, display: 'flex', flexDirection: 'column' }}>
+                  {/* Title and Instructor */}
+                  <div style={{ marginBottom: '12px' }}>
+                    <h3 style={{ 
+                      fontSize: '22px', 
+                      fontWeight: 700, 
+                      color: '#1f2937', 
+                      marginBottom: '8px',
+                      lineHeight: '1.3',
+                      display: '-webkit-box',
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: 'vertical',
+                      overflow: 'hidden'
+                    }}>
+                      {course.title}
+                    </h3>
+                    {course.instructor && (
+                      <div style={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        gap: '6px',
+                        color: '#6b7280',
+                        fontSize: '13px'
+                      }}>
+                        <span style={{ fontWeight: 500 }}>by {course.instructor}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Description */}
+                  <p style={{ 
+                    color: '#6b7280', 
+                    fontSize: '14px', 
+                    lineHeight: '1.6', 
+                    marginBottom: '16px',
+                    flex: 1,
+                    display: '-webkit-box',
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: 'vertical',
+                    overflow: 'hidden'
+                  }}>
+                    {course.description || 'No description provided'}
+                  </p>
+
+                  {/* Meta Info */}
                   <div style={{ 
                     display: 'flex', 
-                    alignItems: 'center', 
-                    gap: '5px',
-                    marginBottom: '15px',
-                    color: '#f59e0b'
+                    gap: '10px', 
+                    marginBottom: '16px',
+                    flexWrap: 'wrap',
+                    alignItems: 'center'
                   }}>
-                    <FiStar style={{ fill: '#f59e0b' }} />
-                    <span style={{ fontSize: '14px', fontWeight: 600 }}>
-                      {course.rating.toFixed(1)}
-                    </span>
-                    <span style={{ fontSize: '12px', color: '#6b7280' }}>
-                      ({course.reviews || 0} reviews)
-                    </span>
+                    {course.duration && (
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        color: '#6b7280',
+                        fontSize: '13px',
+                        background: '#f9fafb',
+                        padding: '6px 12px',
+                        borderRadius: '8px'
+                      }}>
+                        <FiClock size={14} />
+                        <span>{course.duration}</span>
+                      </div>
+                    )}
+                    {course.students && (
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        color: '#6b7280',
+                        fontSize: '13px',
+                        background: '#f9fafb',
+                        padding: '6px 12px',
+                        borderRadius: '8px'
+                      }}>
+                        <FiUsers size={14} />
+                        <span>{course.students.length || 0} students</span>
+                      </div>
+                    )}
+                    {course.rating > 0 && (
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        color: '#f59e0b',
+                        fontSize: '13px',
+                        background: '#fef3c7',
+                        padding: '6px 12px',
+                        borderRadius: '8px',
+                        fontWeight: 600
+                      }}>
+                        <FiStar size={14} style={{ fill: '#f59e0b' }} />
+                        <span>{course.rating.toFixed(1)}</span>
+                        <span style={{ color: '#6b7280', fontWeight: 400 }}>
+                          ({course.reviews || 0})
+                        </span>
+                      </div>
+                    )}
                   </div>
-                )}
 
-                <div style={{ 
-                  display: 'flex', 
-                  justifyContent: 'space-between', 
-                  alignItems: 'center',
-                  paddingTop: '15px',
-                  borderTop: '1px solid #e5e7eb'
-                }}>
-                  <div style={{ fontSize: '20px', fontWeight: 700, color: '#6b46c1' }}>
-                    {course.price ? `$${course.price}` : 'Free'}
-                  </div>
-                  <div style={{ display: 'flex', gap: '10px' }}>
-                    <button 
-                      className="btn btn-primary" 
-                      style={{ fontSize: '14px', padding: '8px 16px' }}
-                      onClick={() => handleEnroll(course.id)}
-                    >
-                      <FiPlay style={{ marginRight: '5px' }} />
-                      Enroll
-                    </button>
-                    {(() => {
-                      const savedProfile = localStorage.getItem('userProfile');
-                      let canDelete = false;
-                      if (savedProfile) {
-                        try {
-                          const profile = JSON.parse(savedProfile);
-                          const isAdmin = profile.isAdmin || false;
-                          const isCreator = course.createdBy?.email === profile.email;
-                          canDelete = isAdmin || isCreator;
-                        } catch (error) {
-                          console.error('Error parsing profile:', error);
+                  {/* Price and Actions */}
+                  <div style={{ 
+                    paddingTop: '16px',
+                    borderTop: '2px solid #f3f4f6',
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    alignItems: 'center',
+                    gap: '12px',
+                    flexWrap: 'wrap'
+                  }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      <div style={{ 
+                        fontSize: '24px', 
+                        fontWeight: 700, 
+                        color: '#6b46c1',
+                        lineHeight: '1'
+                      }}>
+                        {course.price && course.price > 0 ? `₹${course.price}` : 'Free'}
+                      </div>
+                      {course.mrp && course.mrp > course.price && (
+                        <div style={{ 
+                          fontSize: '14px', 
+                          color: '#9ca3af', 
+                          textDecoration: 'line-through',
+                          fontWeight: 400
+                        }}>
+                          MRP: ₹{course.mrp}
+                        </div>
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <button 
+                        className="btn btn-primary" 
+                        style={{ 
+                          fontSize: '13px', 
+                          padding: '10px 18px',
+                          borderRadius: '8px',
+                          fontWeight: 600,
+                          boxShadow: '0 2px 4px rgba(107, 70, 193, 0.2)'
+                        }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedCourse(course);
+                          setIsViewModalOpen(true);
+                        }}
+                      >
+                        View
+                      </button>
+                      <button 
+                        className="btn btn-primary" 
+                        style={{ 
+                          fontSize: '13px', 
+                          padding: '10px 18px',
+                          borderRadius: '8px',
+                          fontWeight: 600,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          boxShadow: '0 2px 4px rgba(107, 70, 193, 0.2)'
+                        }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleEnroll(course.id);
+                        }}
+                      >
+                        <FiPlay size={14} />
+                        Enroll
+                      </button>
+                      {(() => {
+                        const savedProfile = localStorage.getItem('userProfile');
+                        let canEdit = false;
+                        let canDelete = false;
+                        if (savedProfile) {
+                          try {
+                            const profile = JSON.parse(savedProfile);
+                            const isAdmin = profile.isAdmin || profile.isSuperAdmin || 
+                                           profile.email === 'superadmin@gmail.com' || 
+                                           profile.username === 'ironlady';
+                            const isCreator = course.createdBy?.email === profile.email;
+                            canEdit = isAdmin || isCreator;
+                            canDelete = isAdmin || isCreator;
+                          } catch (error) {
+                            console.error('Error parsing profile:', error);
+                          }
                         }
-                      }
-                      return canDelete ? (
-                        <button 
-                          className="action-btn btn-delete"
-                          onClick={() => handleDelete(course.id)}
-                          style={{ padding: '8px 12px' }}
-                          title="Delete course"
-                        >
-                          <FiTrash2 />
-                        </button>
-                      ) : null;
-                    })()}
+                        return (
+                          <>
+                            {canEdit && (
+                              <button 
+                                className="action-btn btn-edit"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleEdit(course);
+                                }}
+                                style={{ 
+                                  padding: '10px',
+                                  borderRadius: '8px',
+                                  minWidth: '40px',
+                                  height: '40px',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center'
+                                }}
+                                title="Edit course"
+                              >
+                                <FiEdit2 size={16} />
+                              </button>
+                            )}
+                            {canDelete && (
+                              <button 
+                                className="action-btn btn-delete"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDelete(course.id);
+                                }}
+                                style={{ 
+                                  padding: '10px',
+                                  borderRadius: '8px',
+                                  minWidth: '40px',
+                                  height: '40px',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center'
+                                }}
+                                title="Delete course"
+                              >
+                                <FiTrash2 size={16} />
+                              </button>
+                            )}
+                          </>
+                        );
+                      })()}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -462,13 +692,41 @@ function Courses() {
         </>
       )}
 
-      {/* Create Course Modal */}
+      {/* Create/Edit Course Modal */}
       {isModalOpen && (
-        <div className="modal-overlay" onClick={() => setIsModalOpen(false)}>
+        <div className="modal-overlay" onClick={() => {
+          setIsModalOpen(false);
+          setEditingCourse(null);
+          setFormData({
+            title: '',
+            description: '',
+            instructor: '',
+            duration: '',
+            level: 'Beginner',
+            price: '',
+            mrp: '',
+            imageUrl: '',
+            link: ''
+          });
+        }}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h2 className="modal-title">Create New Course</h2>
-              <button className="close-btn" onClick={() => setIsModalOpen(false)}>
+              <h2 className="modal-title">{editingCourse ? 'Edit Course' : 'Create New Course'}</h2>
+              <button className="close-btn" onClick={() => {
+                setIsModalOpen(false);
+                setEditingCourse(null);
+                setFormData({
+                  title: '',
+                  description: '',
+                  instructor: '',
+                  duration: '',
+                  level: 'Beginner',
+                  price: '',
+                  mrp: '',
+                  imageUrl: '',
+                  link: ''
+                });
+              }}>
                 <FiX />
               </button>
             </div>
@@ -530,7 +788,7 @@ function Courses() {
                   </select>
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Price ($)</label>
+                  <label className="form-label">Price (₹)</label>
                   <input
                     type="number"
                     className="form-input"
@@ -541,18 +799,86 @@ function Courses() {
                   />
                 </div>
               </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+                <div className="form-group">
+                  <label className="form-label">
+                    <span style={{ marginRight: '4px' }}>₹</span>
+                    MRP (₹) - Optional
+                  </label>
+                  <input
+                    type="number"
+                    className="form-input"
+                    value={formData.mrp}
+                    onChange={(e) => setFormData({ ...formData, mrp: e.target.value })}
+                    placeholder="Maximum Retail Price"
+                    min="0"
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">
+                    <FiImage style={{ display: 'inline', marginRight: '4px' }} />
+                    Image URL - Optional
+                  </label>
+                  <input
+                    type="url"
+                    className="form-input"
+                    value={formData.imageUrl}
+                    onChange={(e) => setFormData({ ...formData, imageUrl: e.target.value })}
+                    placeholder="https://example.com/image.jpg"
+                  />
+                </div>
+              </div>
+              <div className="form-group">
+                <label className="form-label">
+                  <FiLink style={{ display: 'inline', marginRight: '4px' }} />
+                  Course Link - Optional
+                </label>
+                <input
+                  type="url"
+                  className="form-input"
+                  value={formData.link}
+                  onChange={(e) => setFormData({ ...formData, link: e.target.value })}
+                  placeholder="https://example.com/course"
+                />
+              </div>
               <div className="form-actions">
-                <button type="button" className="btn btn-secondary" onClick={() => setIsModalOpen(false)}>
+                <button type="button" className="btn btn-secondary" onClick={() => {
+                  setIsModalOpen(false);
+                  setEditingCourse(null);
+                  setFormData({
+                    title: '',
+                    description: '',
+                    instructor: '',
+                    duration: '',
+                    level: 'Beginner',
+                    price: '',
+                    mrp: '',
+                    imageUrl: '',
+                    link: ''
+                  });
+                }}>
                   Cancel
                 </button>
                 <button type="submit" className="btn btn-primary">
-                  Create Course
+                  {editingCourse ? 'Update Course' : 'Create Course'}
                 </button>
               </div>
             </form>
           </div>
         </div>
       )}
+
+      {/* View Course Modal */}
+      <ViewCourseModal
+        isOpen={isViewModalOpen}
+        onClose={() => {
+          setIsViewModalOpen(false);
+          setSelectedCourse(null);
+        }}
+        course={selectedCourse}
+        onEnroll={handleEnroll}
+        onEdit={handleEdit}
+      />
     </div>
   );
 }
