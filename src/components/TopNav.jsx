@@ -143,11 +143,12 @@ function TopNav() {
       return;
     }
 
+    // Simplified query - no orderBy needed for just counting unread notifications
+    // This avoids the need for a composite index
     const notificationsQuery = query(
       collection(db, 'notifications'),
       where('userId', '==', userId),
-      where('read', '==', false),
-      orderBy('createdAt', 'desc')
+      where('read', '==', false)
     );
 
     const unsubscribe = onSnapshot(
@@ -157,6 +158,8 @@ function TopNav() {
       },
       (error) => {
         console.error('Error fetching notifications:', error);
+        // Silently fail - don't show error to user, just set count to 0
+        setUnreadNotificationCount(0);
       }
     );
 

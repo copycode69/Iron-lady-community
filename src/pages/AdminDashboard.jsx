@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { collection, query, onSnapshot, doc, updateDoc, deleteDoc, addDoc, serverTimestamp, orderBy, limit, getDocs } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import CreatePostModal from '../components/CreatePostModal';
 import CreateAnnouncementModal from '../components/CreateAnnouncementModal';
 import AdminPasswordModal from '../components/AdminPasswordModal';
 import { FiPlus, FiEdit, FiTrash2, FiX } from 'react-icons/fi';
+import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 function AdminDashboard() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -513,6 +514,75 @@ function AdminDashboard() {
     return channels.filter(ch => ch.stateId === stateId);
   };
 
+  // Calculate chart data using useMemo for performance (must be before conditional returns)
+  const pieChartData = useMemo(() => {
+    const categoryCount = {};
+    posts.forEach(post => {
+      const category = post.category || post.channelName || 'General';
+      categoryCount[category] = (categoryCount[category] || 0) + 1;
+    });
+    const data = Object.entries(categoryCount).map(([name, value]) => ({ name, value }));
+    return data.length > 0 ? data : [{ name: 'No Data', value: 1 }];
+  }, [posts]);
+
+  const pieChartColors = useMemo(() => {
+    const colors = ['#8884d8', '#82ca9d', '#ffc658', '#ff7300', '#8dd1e1', '#d084d0', '#ffb347', '#87ceeb'];
+    return colors;
+  }, []);
+
+  const postsByStateData = useMemo(() => {
+    const stateCount = {};
+    posts.forEach(post => {
+      const stateName = post.stateName || 'Announcements';
+      stateCount[stateName] = (stateCount[stateName] || 0) + 1;
+    });
+    const data = Object.entries(stateCount)
+      .map(([name, value]) => ({ name: name.length > 15 ? name.substring(0, 15) + '...' : name, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 10);
+    return data.length > 0 ? data : [{ name: 'No Data', value: 0 }];
+  }, [posts]);
+
+  const usersByStateData = useMemo(() => {
+    const stateCount = {};
+    users.forEach(user => {
+      const stateId = user.state;
+      const stateName = stateId ? (states.find(s => s.id === stateId)?.name || 'Unknown') : 'No State';
+      stateCount[stateName] = (stateCount[stateName] || 0) + 1;
+    });
+    const data = Object.entries(stateCount)
+      .map(([name, value]) => ({ name: name.length > 15 ? name.substring(0, 15) + '...' : name, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 10);
+    return data.length > 0 ? data : [{ name: 'No Data', value: 0 }];
+  }, [users, states]);
+
+  const postsOverTimeData = useMemo(() => {
+    const days = [];
+    const today = new Date();
+    for (let i = 6; i >= 0; i--) {
+      const date = new Date(today);
+      date.setDate(date.getDate() - i);
+      const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      days.push({ name: dateStr, value: 0 });
+    }
+    
+    posts.forEach(post => {
+      if (post.createdAt) {
+        const postDate = post.createdAt.toDate ? post.createdAt.toDate() : new Date(post.createdAt);
+        const daysAgo = Math.floor((today - postDate) / (1000 * 60 * 60 * 24));
+        if (daysAgo >= 0 && daysAgo <= 6) {
+          const dayIndex = 6 - daysAgo;
+          if (days[dayIndex]) {
+            days[dayIndex].value += 1;
+          }
+        }
+      }
+    });
+    
+    return days;
+  }, [posts]);
+
   // Show password modal if not authenticated
   if (!isAuthenticated) {
     return (
@@ -622,6 +692,110 @@ function AdminDashboard() {
         <div className="stat-card">
           <div className="stat-value">{channels.length}</div>
           <div className="stat-label">Channels</div>
+        </div>
+      </div>
+
+      {/* Analytics Charts */}
+      <div className="admin-section">
+        <h2 className="section-title">Analytics</h2>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(500px, 1fr))', gap: '20px', marginTop: '20px' }}>
+          {/* Pie Chart - Posts by Category */}
+          <div className="stat-card" style={{ padding: '20px', background: 'white', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
+            <h3 style={{ fontSize: '18px', fontWeight: 600, color: '#1f2937', marginBottom: '20px', textAlign: 'center' }}>
+              Posts by Category
+            </h3>
+            <ResponsiveContainer width="100%" height={300}>
+              <PieChart>
+                <Pie
+                  data={pieChartData}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={false}
+                  label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                  outerRadius={100}
+                  fill="#8884d8"
+                  dataKey="value"
+                >
+                  {pieChartData.map((_, index) => (
+                    <Cell key={`cell-${index}`} fill={pieChartColors[index % pieChartColors.length]} />
+                  ))}
+                </Pie>
+                <Tooltip />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Bar Chart - Posts by State */}
+          <div className="stat-card" style={{ padding: '20px', background: 'white', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
+            <h3 style={{ fontSize: '18px', fontWeight: 600, color: '#1f2937', marginBottom: '20px', textAlign: 'center' }}>
+              Posts by State
+            </h3>
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart
+                data={postsByStateData}
+                margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis 
+                  dataKey="name" 
+                  angle={-45} 
+                  textAnchor="end" 
+                  height={100}
+                  style={{ fontSize: '12px' }}
+                />
+                <YAxis />
+                <Tooltip />
+                <Legend />
+                <Bar dataKey="value" fill="#8884d8" name="Posts" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Bar Chart - Users by State */}
+          <div className="stat-card" style={{ padding: '20px', background: 'white', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
+            <h3 style={{ fontSize: '18px', fontWeight: 600, color: '#1f2937', marginBottom: '20px', textAlign: 'center' }}>
+              Users by State
+            </h3>
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart
+                data={usersByStateData}
+                margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis 
+                  dataKey="name" 
+                  angle={-45} 
+                  textAnchor="end" 
+                  height={100}
+                  style={{ fontSize: '12px' }}
+                />
+                <YAxis />
+                <Tooltip />
+                <Legend />
+                <Bar dataKey="value" fill="#82ca9d" name="Users" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Bar Chart - Posts Over Time (Last 7 Days) */}
+          <div className="stat-card" style={{ padding: '20px', background: 'white', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
+            <h3 style={{ fontSize: '18px', fontWeight: 600, color: '#1f2937', marginBottom: '20px', textAlign: 'center' }}>
+              Posts Over Time (Last 7 Days)
+            </h3>
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart
+                data={postsOverTimeData}
+                margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="name" />
+                <YAxis />
+                <Tooltip />
+                <Legend />
+                <Bar dataKey="value" fill="#ffc658" name="Posts" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         </div>
       </div>
 
