@@ -183,9 +183,10 @@ function PostCard({ post, onLike, onComment, userId, userProfile, isAdmin }) {
           ))}
         </div>
       </div>
-      <div className="post-content">
-        {post.content}
-      </div>
+      <div 
+        className="post-content"
+        dangerouslySetInnerHTML={{ __html: post.content }}
+      />
       <div className="post-actions">
         <div className="post-action" onClick={handleLike}>
           <FiHeart className="post-action-icon" style={{ color: liked ? '#ef4444' : '' }} />

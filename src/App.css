@@ -952,6 +952,19 @@ body {
   line-height: 1.6;
 }
 
+.post-content a,
+.post-content .inserted-link {
+  color: #6b46c1;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.post-content a:hover,
+.post-content .inserted-link:hover {
+  color: #5b21b6;
+  text-decoration: underline;
+}
+
 .post-actions {
   padding: 15px;
   border-top: 1px solid #e5e7eb;

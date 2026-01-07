@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { collection, query, orderBy, limit, startAfter, getDocs, doc, updateDoc, increment, arrayUnion, arrayRemove, addDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
+import { collection, query, orderBy, limit, startAfter, getDocs, getDoc, doc, updateDoc, increment, arrayUnion, arrayRemove, addDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import PostCard from '../components/PostCard';
 import CreatePostModal from '../components/CreatePostModal';
@@ -521,11 +521,28 @@ function Feed() {
       const postRef = doc(db, 'posts', postId);
       const userId = userProfile?.id || 'guest';
       
+      // Get post data to find author
+      const postDoc = await getDoc(postRef);
+      const postData = postDoc.data();
+      const postAuthorId = postData?.author?.id || postData?.author?.uid;
+      
       if (isLiked) {
         await updateDoc(postRef, {
           likes: increment(1),
           likedBy: arrayUnion(userId)
         });
+        
+        // Create notification for post author when someone likes their post
+        if (postAuthorId && userId !== 'guest') {
+          try {
+            const { createLikeNotification } = await import('../utils/notifications');
+            const likerName = userProfile?.name || 'Someone';
+            await createLikeNotification(postAuthorId, likerName, postId, postData?.content);
+          } catch (error) {
+            console.error('Error creating like notification:', error);
+            // Don't block like action if notification fails
+          }
+        }
       } else {
         await updateDoc(postRef, {
           likes: increment(-1),

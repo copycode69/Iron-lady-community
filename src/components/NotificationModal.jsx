@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { FiX, FiBell, FiAtSign, FiMessageCircle } from 'react-icons/fi';
-import { collection, query, onSnapshot, updateDoc, doc, orderBy, limit, where } from 'firebase/firestore';
+import { FiX, FiBell, FiAtSign, FiMessageCircle, FiHeart, FiUser, FiTrash2, FiCheck } from 'react-icons/fi';
+import { collection, query, onSnapshot, updateDoc, deleteDoc, doc, orderBy, limit, where, writeBatch } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { formatDistanceToNow } from 'date-fns';
 
@@ -92,6 +92,42 @@ function NotificationModal({ isOpen, onClose }) {
     }
   };
 
+  const clearAllNotifications = async () => {
+    if (!userProfile) return;
+    
+    if (!window.confirm('Are you sure you want to delete all notifications? This action cannot be undone.')) {
+      return;
+    }
+    
+    try {
+      // Use batch write for better performance
+      const batch = writeBatch(db);
+      const batchLimit = 500; // Firestore batch limit
+      
+      notifications.slice(0, batchLimit).forEach(notification => {
+        const notificationRef = doc(db, 'notifications', notification.id);
+        batch.delete(notificationRef);
+      });
+      
+      await batch.commit();
+      
+      // If there are more than 500 notifications, delete the rest
+      if (notifications.length > batchLimit) {
+        const remainingNotifications = notifications.slice(batchLimit);
+        for (const notification of remainingNotifications) {
+          try {
+            await deleteDoc(doc(db, 'notifications', notification.id));
+          } catch (error) {
+            console.error('Error deleting notification:', error);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error clearing notifications:', error);
+      alert('Error clearing notifications. Please try again.');
+    }
+  };
+
   if (!isOpen) return null;
 
   const unreadCount = notifications.filter(n => !n.read).length;
@@ -99,44 +135,146 @@ function NotificationModal({ isOpen, onClose }) {
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '500px', maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
-        <div className="modal-header" style={{ background: 'linear-gradient(135deg, #f59e0b 0%, #ef4444 100%)', color: 'white' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <FiBell size={20} />
-            <h2 className="modal-title" style={{ color: 'white', margin: 0 }}>Notifications</h2>
-            {unreadCount > 0 && (
-              <span style={{
-                background: 'rgba(255, 255, 255, 0.3)',
-                borderRadius: '12px',
-                padding: '2px 8px',
-                fontSize: '12px',
-                fontWeight: 600
+        <div className="modal-header" style={{ 
+          background: 'linear-gradient(135deg, #f59e0b 0%, #ef4444 100%)', 
+          color: 'white',
+          padding: '20px 24px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
+          borderBottom: '1px solid rgba(255, 255, 255, 0.1)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1 }}>
+            <div style={{
+              width: '40px',
+              height: '40px',
+              borderRadius: '10px',
+              background: 'rgba(255, 255, 255, 0.15)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              backdropFilter: 'blur(10px)'
+            }}>
+              <FiBell size={22} />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+              <h2 className="modal-title" style={{ 
+                color: 'white', 
+                margin: 0, 
+                fontSize: '20px',
+                fontWeight: 700,
+                letterSpacing: '-0.02em'
               }}>
-                {unreadCount} new
-              </span>
-            )}
+                Notifications
+              </h2>
+              {unreadCount > 0 && (
+                <span style={{
+                  background: 'rgba(255, 255, 255, 0.25)',
+                  borderRadius: '10px',
+                  padding: '2px 8px',
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  display: 'inline-block',
+                  marginTop: '2px'
+                }}>
+                  {unreadCount} unread
+                </span>
+              )}
+            </div>
           </div>
-          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            {notifications.length > 0 && (
+              <button
+                onClick={clearAllNotifications}
+                style={{
+                  background: 'rgba(255, 255, 255, 0.15)',
+                  border: '1px solid rgba(255, 255, 255, 0.2)',
+                  color: 'white',
+                  padding: '8px 14px',
+                  borderRadius: '8px',
+                  fontSize: '13px',
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  transition: 'all 0.2s ease',
+                  backdropFilter: 'blur(10px)'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.25)';
+                  e.currentTarget.style.transform = 'translateY(-1px)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)';
+                  e.currentTarget.style.transform = 'translateY(0)';
+                }}
+                title="Clear all notifications"
+              >
+                <FiTrash2 size={14} />
+                Clear Chat
+              </button>
+            )}
             {unreadCount > 0 && (
               <button
                 onClick={markAllAsRead}
                 style={{
-                  background: 'rgba(255, 255, 255, 0.2)',
-                  border: 'none',
+                  background: 'rgba(255, 255, 255, 0.15)',
+                  border: '1px solid rgba(255, 255, 255, 0.2)',
                   color: 'white',
-                  padding: '6px 12px',
-                  borderRadius: '6px',
-                  fontSize: '12px',
+                  padding: '8px 14px',
+                  borderRadius: '8px',
+                  fontSize: '13px',
                   cursor: 'pointer',
-                  fontWeight: 600
+                  fontWeight: 600,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  transition: 'all 0.2s ease',
+                  backdropFilter: 'blur(10px)'
                 }}
-                onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.3)'}
-                onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.2)'}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.25)';
+                  e.currentTarget.style.transform = 'translateY(-1px)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)';
+                  e.currentTarget.style.transform = 'translateY(0)';
+                }}
+                title="Mark all as read"
               >
-                Mark all read
+                <FiCheck size={14} />
+                Mark as Read
               </button>
             )}
-            <button className="close-btn" onClick={onClose} style={{ color: 'white' }}>
-              <FiX />
+            <button 
+              className="close-btn" 
+              onClick={onClose} 
+              style={{ 
+                color: 'white',
+                background: 'rgba(255, 255, 255, 0.1)',
+                border: 'none',
+                width: '36px',
+                height: '36px',
+                borderRadius: '8px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                marginLeft: '4px'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.2)';
+                e.currentTarget.style.transform = 'rotate(90deg)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
+                e.currentTarget.style.transform = 'rotate(0deg)';
+              }}
+            >
+              <FiX size={18} />
             </button>
           </div>
         </div>
@@ -198,8 +336,14 @@ function NotificationModal({ isOpen, onClose }) {
                         borderRadius: '50%',
                         background: notification.type === 'mention' 
                           ? 'linear-gradient(135deg, #f59e0b 0%, #ef4444 100%)' 
+                          : notification.type === 'welcome'
+                          ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)'
+                          : notification.type === 'like'
+                          ? 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)'
+                          : notification.type === 'comment'
+                          ? 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)'
                           : '#e0e7ff',
-                        color: notification.type === 'mention' ? 'white' : '#4f46e5',
+                        color: 'white',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
@@ -207,8 +351,14 @@ function NotificationModal({ isOpen, onClose }) {
                       }}>
                         {notification.type === 'mention' ? (
                           <FiAtSign size={20} />
-                        ) : (
+                        ) : notification.type === 'welcome' ? (
+                          <FiUser size={20} />
+                        ) : notification.type === 'like' ? (
+                          <FiHeart size={20} />
+                        ) : notification.type === 'comment' ? (
                           <FiMessageCircle size={20} />
+                        ) : (
+                          <FiBell size={20} />
                         )}
                       </div>
                       <div style={{ flex: 1 }}>
@@ -218,7 +368,12 @@ function NotificationModal({ isOpen, onClose }) {
                           fontSize: '15px',
                           marginBottom: '4px'
                         }}>
-                          {notification.title}
+                          {notification.title || 
+                            (notification.type === 'welcome' ? 'Welcome!' :
+                             notification.type === 'like' ? 'New Like' :
+                             notification.type === 'comment' ? 'New Comment' :
+                             notification.type === 'mention' ? 'You were mentioned' :
+                             'Notification')}
                         </div>
                         <div style={{ 
                           color: '#374151', 
@@ -247,6 +402,48 @@ function NotificationModal({ isOpen, onClose }) {
                                 fontWeight: 600
                               }}>
                                 Tagged
+                              </span>
+                            </>
+                          )}
+                          {notification.type === 'welcome' && (
+                            <>
+                              <span>•</span>
+                              <span style={{ 
+                                background: '#d1fae5',
+                                color: '#065f46',
+                                padding: '2px 8px',
+                                borderRadius: '4px',
+                                fontWeight: 600
+                              }}>
+                                Welcome
+                              </span>
+                            </>
+                          )}
+                          {notification.type === 'like' && (
+                            <>
+                              <span>•</span>
+                              <span style={{ 
+                                background: '#fee2e2',
+                                color: '#991b1b',
+                                padding: '2px 8px',
+                                borderRadius: '4px',
+                                fontWeight: 600
+                              }}>
+                                Like
+                              </span>
+                            </>
+                          )}
+                          {notification.type === 'comment' && (
+                            <>
+                              <span>•</span>
+                              <span style={{ 
+                                background: '#dbeafe',
+                                color: '#1e40af',
+                                padding: '2px 8px',
+                                borderRadius: '4px',
+                                fontWeight: 600
+                              }}>
+                                Comment
                               </span>
                             </>
                           )}

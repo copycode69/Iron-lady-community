@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { FiX, FiSend, FiMessageCircle, FiAtSign, FiUser } from 'react-icons/fi';
-import { collection, query, onSnapshot, addDoc, updateDoc, doc, serverTimestamp, orderBy, limit, getDocs } from 'firebase/firestore';
+import { FiX, FiSend, FiMessageCircle, FiAtSign, FiUser, FiTrash2, FiCheck } from 'react-icons/fi';
+import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, orderBy, limit, getDocs, writeBatch } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { formatDistanceToNow } from 'date-fns';
 
@@ -261,6 +261,66 @@ function MessageModal({ isOpen, onClose, isAdmin }) {
     }
   };
 
+  const markAllAsRead = async () => {
+    if (!userProfile) return;
+    
+    try {
+      const userId = userProfile.id || 'guest';
+      const unreadMessages = messages.filter(msg => !msg.readBy || !msg.readBy.includes(userId));
+      
+      const updatePromises = unreadMessages.map(message => {
+        const messageRef = doc(db, 'messages', message.id);
+        return updateDoc(messageRef, {
+          readBy: [...(message.readBy || []), userId]
+        });
+      });
+      
+      await Promise.all(updatePromises);
+    } catch (error) {
+      console.error('Error marking all messages as read:', error);
+      alert('Error marking messages as read. Please try again.');
+    }
+  };
+
+  const clearAllMessages = async () => {
+    if (!isAdmin) {
+      alert('Only admins can clear messages.');
+      return;
+    }
+    
+    if (!window.confirm('Are you sure you want to delete all messages? This action cannot be undone.')) {
+      return;
+    }
+    
+    try {
+      // Use batch write for better performance
+      const batch = writeBatch(db);
+      const batchLimit = 500; // Firestore batch limit
+      
+      messages.slice(0, batchLimit).forEach(message => {
+        const messageRef = doc(db, 'messages', message.id);
+        batch.delete(messageRef);
+      });
+      
+      await batch.commit();
+      
+      // If there are more than 500 messages, delete the rest
+      if (messages.length > batchLimit) {
+        const remainingMessages = messages.slice(batchLimit);
+        for (const message of remainingMessages) {
+          try {
+            await deleteDoc(doc(db, 'messages', message.id));
+          } catch (error) {
+            console.error('Error deleting message:', error);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error clearing messages:', error);
+      alert('Error clearing messages. Please try again.');
+    }
+  };
+
   if (!isOpen) return null;
 
   const unreadCount = messages.filter(msg => {
@@ -272,25 +332,148 @@ function MessageModal({ isOpen, onClose, isAdmin }) {
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '600px', maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
-        <div className="modal-header" style={{ background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)', color: 'white' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <FiMessageCircle size={20} />
-            <h2 className="modal-title" style={{ color: 'white', margin: 0 }}>Messages</h2>
-            {unreadCount > 0 && (
-              <span style={{
-                background: 'rgba(255, 255, 255, 0.3)',
-                borderRadius: '12px',
-                padding: '2px 8px',
-                fontSize: '12px',
-                fontWeight: 600
+        <div className="modal-header" style={{ 
+          background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)', 
+          color: 'white',
+          padding: '20px 24px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
+          borderBottom: '1px solid rgba(255, 255, 255, 0.1)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1 }}>
+            <div style={{
+              width: '40px',
+              height: '40px',
+              borderRadius: '10px',
+              background: 'rgba(255, 255, 255, 0.15)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              backdropFilter: 'blur(10px)'
+            }}>
+              <FiMessageCircle size={22} />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+              <h2 className="modal-title" style={{ 
+                color: 'white', 
+                margin: 0, 
+                fontSize: '20px',
+                fontWeight: 700,
+                letterSpacing: '-0.02em'
               }}>
-                {unreadCount} new
-              </span>
-            )}
+                Messages
+              </h2>
+              {unreadCount > 0 && (
+                <span style={{
+                  background: 'rgba(255, 255, 255, 0.25)',
+                  borderRadius: '10px',
+                  padding: '2px 8px',
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  display: 'inline-block',
+                  marginTop: '2px'
+                }}>
+                  {unreadCount} unread
+                </span>
+              )}
+            </div>
           </div>
-          <button className="close-btn" onClick={onClose} style={{ color: 'white' }}>
-            <FiX />
-          </button>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            {messages.length > 0 && (
+              <button
+                onClick={clearAllMessages}
+                style={{
+                  background: 'rgba(255, 255, 255, 0.15)',
+                  border: '1px solid rgba(255, 255, 255, 0.2)',
+                  color: 'white',
+                  padding: '8px 14px',
+                  borderRadius: '8px',
+                  fontSize: '13px',
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  transition: 'all 0.2s ease',
+                  backdropFilter: 'blur(10px)'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.25)';
+                  e.currentTarget.style.transform = 'translateY(-1px)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)';
+                  e.currentTarget.style.transform = 'translateY(0)';
+                }}
+                title="Clear all messages"
+              >
+                <FiTrash2 size={14} />
+                Clear Chat
+              </button>
+            )}
+            {unreadCount > 0 && (
+              <button
+                onClick={markAllAsRead}
+                style={{
+                  background: 'rgba(255, 255, 255, 0.15)',
+                  border: '1px solid rgba(255, 255, 255, 0.2)',
+                  color: 'white',
+                  padding: '8px 14px',
+                  borderRadius: '8px',
+                  fontSize: '13px',
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  transition: 'all 0.2s ease',
+                  backdropFilter: 'blur(10px)'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.25)';
+                  e.currentTarget.style.transform = 'translateY(-1px)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)';
+                  e.currentTarget.style.transform = 'translateY(0)';
+                }}
+                title="Mark all as read"
+              >
+                <FiCheck size={14} />
+                Mark as Read
+              </button>
+            )}
+            <button 
+              className="close-btn" 
+              onClick={onClose} 
+              style={{ 
+                color: 'white',
+                background: 'rgba(255, 255, 255, 0.1)',
+                border: 'none',
+                width: '36px',
+                height: '36px',
+                borderRadius: '8px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                marginLeft: '4px'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.2)';
+                e.currentTarget.style.transform = 'rotate(90deg)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
+                e.currentTarget.style.transform = 'rotate(0deg)';
+              }}
+            >
+              <FiX size={18} />
+            </button>
+          </div>
         </div>
 
         <div style={{ flex: 1, overflowY: 'auto', padding: '20px', background: '#f9fafb' }}>

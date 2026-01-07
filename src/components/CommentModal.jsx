@@ -8,6 +8,7 @@ import {
   addDoc, 
   deleteDoc, 
   updateDoc, 
+  getDoc,
   doc,
   serverTimestamp,
   orderBy,
@@ -77,6 +78,28 @@ function CommentModal({ isOpen, onClose, postId, userId, userProfile, isAdmin })
       await updateDoc(postRef, {
         comments: increment(1)
       });
+
+      // Create notification for post author when someone comments
+      try {
+        const postDoc = await getDoc(postRef);
+        const postData = postDoc.data();
+        const postAuthorId = postData?.author?.id || postData?.author?.uid;
+        
+        if (postAuthorId && userId && userId !== 'guest' && userId !== postAuthorId) {
+          const { createCommentNotification } = await import('../utils/notifications');
+          const commenterName = userProfile?.name || 'Someone';
+          await createCommentNotification(
+            postAuthorId, 
+            commenterName, 
+            postId, 
+            commentData.text, 
+            postData?.content
+          );
+        }
+      } catch (error) {
+        console.error('Error creating comment notification:', error);
+        // Don't block comment action if notification fails
+      }
 
       setNewComment('');
     } catch (error) {

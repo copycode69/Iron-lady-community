@@ -172,6 +172,15 @@ function UserProfile({ user }) {
               isAdmin: true,
               isSuperAdmin: true
             };
+            
+            // Create welcome notification for new super admin
+            try {
+              const { createWelcomeNotification } = await import('../utils/notifications');
+              await createWelcomeNotification(docRef.id, formData.name);
+            } catch (error) {
+              console.error('Error creating welcome notification:', error);
+              // Don't block user registration if notification fails
+            }
           }
         } else {
           // Create new regular user
@@ -191,6 +200,15 @@ function UserProfile({ user }) {
             isAdmin: false,
             isSuperAdmin: false
           };
+          
+          // Create welcome notification for new user
+          try {
+            const { createWelcomeNotification } = await import('../utils/notifications');
+            await createWelcomeNotification(docRef.id, formData.name);
+          } catch (error) {
+            console.error('Error creating welcome notification:', error);
+            // Don't block user registration if notification fails
+          }
         }
       }
       

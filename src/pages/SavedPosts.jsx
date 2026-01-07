@@ -87,15 +87,32 @@ function SavedPosts({ user }) {
 
   const handleLike = async (postId, isLiked) => {
     try {
-      const { doc, updateDoc, increment, arrayUnion, arrayRemove } = await import('firebase/firestore');
+      const { doc, getDoc, updateDoc, increment, arrayUnion, arrayRemove } = await import('firebase/firestore');
       const postRef = doc(db, 'posts', postId);
       const userId = userProfile?.id || user?.uid || 'guest';
+      
+      // Get post data to find author
+      const postDoc = await getDoc(postRef);
+      const postData = postDoc.data();
+      const postAuthorId = postData?.author?.id || postData?.author?.uid;
       
       if (isLiked) {
         await updateDoc(postRef, {
           likes: increment(1),
           likedBy: arrayUnion(userId)
         });
+        
+        // Create notification for post author when someone likes their post
+        if (postAuthorId && userId !== 'guest') {
+          try {
+            const { createLikeNotification } = await import('../utils/notifications');
+            const likerName = userProfile?.name || user?.displayName || 'Someone';
+            await createLikeNotification(postAuthorId, likerName, postId, postData?.content);
+          } catch (error) {
+            console.error('Error creating like notification:', error);
+            // Don't block like action if notification fails
+          }
+        }
       } else {
         await updateDoc(postRef, {
           likes: increment(-1),
