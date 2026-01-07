@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import { FiMonitor, FiCamera, FiHome } from 'react-icons/fi';
+import { Link, useLocation, useSearchParams } from 'react-router-dom';
+import { FiMonitor, FiCamera, FiHome, FiMapPin } from 'react-icons/fi';
 import { collection, query, onSnapshot, doc, setDoc, updateDoc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 
 function Sidebar() {
   const location = useLocation();
+  const [searchParams] = useSearchParams();
+  const selectedChannelId = searchParams.get('channel');
   const [states, setStates] = useState([]);
   const [channels, setChannels] = useState([]);
   const [userState, setUserState] = useState(null);
@@ -242,8 +244,8 @@ function Sidebar() {
           <img src="/logo.png" alt="Iron Lady Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
         </div>
         <div className="sidebar-brand-name">
-          <div>Ironlady</div>
-          <div className="sidebar-brand-subtitle">Community</div>
+          <div className="sidebar-brand-main">Ironlady</div>
+          <div className="sidebar-brand-subtitle">COMMUNITY</div>
         </div>
       </div>
 
@@ -276,8 +278,8 @@ function Sidebar() {
             <div key={state.id} className="categories-section">
               <div className="category-city">
                 <div className="city-name">
-                  <span className="city-name-icon">📍</span>
-                  {state.name}
+                  <FiMapPin className="city-name-icon" size={16} />
+                  <span className="city-name-text">{state.name.toUpperCase()}</span>
                 </div>
                 <div className="channels-list">
                   {stateChannels.length > 0 ? (
@@ -285,8 +287,8 @@ function Sidebar() {
                       <Link
                         key={channel.id}
                         to={`/feed?channel=${channel.id}`}
-                        className="category-item"
-                        style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', cursor: 'pointer' }}
+                        className={`category-item ${selectedChannelId === channel.id ? 'active' : ''}`}
+                        style={{ textDecoration: 'none' }}
                       >
                         <div className="category-dot"></div>
                         <span className="channel-name">{channel.name}</span>
