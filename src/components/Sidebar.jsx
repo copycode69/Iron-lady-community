@@ -3,6 +3,7 @@ import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { FiMonitor, FiCamera, FiHome, FiMapPin } from 'react-icons/fi';
 import { collection, query, onSnapshot, doc, setDoc, updateDoc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
+import LiveStreamModal from './LiveStreamModal';
 
 function Sidebar() {
   const location = useLocation();
@@ -13,6 +14,7 @@ function Sidebar() {
   const [userState, setUserState] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isLive, setIsLive] = useState(false);
+  const [isLiveModalOpen, setIsLiveModalOpen] = useState(false);
 
   useEffect(() => {
     // Function to check if user is admin
@@ -186,51 +188,17 @@ function Sidebar() {
   }, []); // Run once, but check admin status inside callbacks
 
   const handleGoLive = async () => {
-    try {
-      const liveStatusRef = doc(db, 'system', 'liveStatus');
-      const liveDoc = await getDoc(liveStatusRef);
-      
-      // Get admin name
-      const savedProfile = localStorage.getItem('userProfile');
-      const isAdminAuthenticated = sessionStorage.getItem('adminAuthenticated') === 'true';
-      let adminName = 'Admin';
-      
-      if (savedProfile) {
-        try {
-          const profile = JSON.parse(savedProfile);
-          adminName = profile.name || 'Admin';
-        } catch (error) {
-          console.error('Error parsing profile:', error);
-        }
-      } else if (isAdminAuthenticated) {
-        adminName = 'IronLady';
-      }
-
-      if (liveDoc.exists() && liveDoc.data().isLive) {
-        // Stop live
-        if (window.confirm('Are you sure you want to stop the live session?')) {
-          await updateDoc(liveStatusRef, {
-            isLive: false,
-            stoppedAt: new Date()
-          });
-          alert('Live session stopped!');
-        }
-      } else {
-        // Start live
-        const message = prompt('Enter a message for your live session (optional):');
-        await setDoc(liveStatusRef, {
-          isLive: true,
-          adminName: adminName,
-          message: message || '',
-          startedAt: new Date(),
-          stoppedAt: null
-        }, { merge: true });
-        alert('You are now live! All users will see this notification.');
-      }
-    } catch (error) {
-      console.error('Error toggling live status:', error);
-      alert('Error toggling live status. Please try again.');
+    if (isLive) {
+      // If already live, open modal to stop
+      setIsLiveModalOpen(true);
+    } else {
+      // Open live stream modal
+      setIsLiveModalOpen(true);
     }
+  };
+
+  const handleStopLive = async () => {
+    setIsLiveModalOpen(false);
   };
 
   const getChannelsByState = (stateId) => {
@@ -322,6 +290,14 @@ function Sidebar() {
           </button>
         </div>
       )}
+
+      {/* Live Stream Modal */}
+      <LiveStreamModal
+        isOpen={isLiveModalOpen}
+        onClose={() => setIsLiveModalOpen(false)}
+        isAdmin={isAdmin}
+        onStopLive={handleStopLive}
+      />
     </div>
   );
 }

@@ -7,6 +7,7 @@ function LiveBanner() {
   const [isLive, setIsLive] = useState(false);
   const [liveData, setLiveData] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isLiveModalOpen, setIsLiveModalOpen] = useState(false);
 
   useEffect(() => {
     // Check if current user is admin
@@ -67,35 +68,51 @@ function LiveBanner() {
   if (!isLive || !liveData) return null;
 
   return (
-    <div className="live-banner">
-      <div className="live-banner-content">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <div className="live-indicator" style={{ position: 'relative' }}>
-            <FiRadio style={{ fontSize: '18px', position: 'relative', zIndex: 1 }} />
-            <span className="live-pulse"></span>
-          </div>
-          <div>
-            <div style={{ fontWeight: 700, fontSize: '15px', color: 'white' }}>
-              🔴 {liveData.adminName || 'Admin'} is Live!
+    <>
+      <div className="live-banner" onClick={() => setIsLiveModalOpen(true)} style={{ cursor: 'pointer' }}>
+        <div className="live-banner-content">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div className="live-indicator" style={{ position: 'relative' }}>
+              <FiVideo style={{ fontSize: '18px', position: 'relative', zIndex: 1 }} />
+              <span className="live-pulse"></span>
             </div>
-            {liveData.message && (
-              <div style={{ fontSize: '13px', color: 'rgba(255, 255, 255, 0.9)', marginTop: '2px' }}>
-                {liveData.message}
+            <div>
+              <div style={{ fontWeight: 700, fontSize: '15px', color: 'white' }}>
+                🔴 {liveData.adminName || 'Admin'} is Live!
               </div>
+              {liveData.message && (
+                <div style={{ fontSize: '13px', color: 'rgba(255, 255, 255, 0.9)', marginTop: '2px' }}>
+                  {liveData.message}
+                </div>
+              )}
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '13px', color: 'rgba(255, 255, 255, 0.9)' }}>Click to join</span>
+            {isAdmin && (
+              <button 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleStopLive();
+                }}
+                className="stop-live-btn"
+                title="Stop Live Session"
+              >
+                <FiX size={18} />
+              </button>
             )}
           </div>
         </div>
-        {isAdmin && (
-          <button 
-            onClick={handleStopLive}
-            className="stop-live-btn"
-            title="Stop Live Session"
-          >
-            <FiX size={18} />
-          </button>
-        )}
       </div>
-    </div>
+
+      {/* Live Stream Modal */}
+      <LiveStreamModal
+        isOpen={isLiveModalOpen}
+        onClose={() => setIsLiveModalOpen(false)}
+        isAdmin={isAdmin}
+        onStopLive={handleStopLive}
+      />
+    </>
   );
 }
 
